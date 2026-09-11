@@ -35,6 +35,12 @@ function careValidateComment(item,text) {
   const name=String(item.customer_name||'').trim(), phone=String(item.customer_phone||'').replace(/\D/g,'');
   if((name&&text.includes(name))||(phone&&text.replace(/\D/g,'').includes(phone))||/01[016789][ -]?\d{3,4}[ -]?\d{4}/.test(text)) throw Error('고객에게 보이는 코멘트에 이름이나 전화번호를 넣을 수 없습니다.');
 }
+function carePresetChips(targetId) {
+  return `<div class="preset-groups" data-target="${targetId}">${Object.entries(commentPresets).map(([g,list])=>`<div class="preset-group"><span class="preset-name">${esc(g)}</span>${list.map(t=>`<button type="button" class="chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>`).join('')}</div>`;
+}
+function bindPresetChips(scope) {
+  scope.querySelectorAll('.preset-groups').forEach(g=>{const ta=scope.querySelector('#'+g.dataset.target);g.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const t=b.dataset.text;if(ta.value.includes(t))return;ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+t;ta.dispatchEvent(new Event('input'));});});
+}
 function careChecked(scope) { return [...scope.querySelectorAll('.checks input:checked')].map(x=>x.value); }
 // Admin: existing photos shown as a selectable grid (checked = keep). Unchecking removes the photo on save.
 function carePhotoPicker(urls) {
@@ -49,8 +55,8 @@ function careExisting(item,out) {
 }
 function careEditor(item,r={}) {
   const out=document.querySelector('#found');
-  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div><label>작업 내용</label>${careChecks(careServices(r))}<label>사진 (선택, 여러 장 가능)</label>${carePhotoPicker(carePhotoList(r))}<input type="file" accept="image/*" multiple id="care-photos"><p id="photo-preview" class="muted"></p>${careArea('care-comment','고객에게 보이는 코멘트 (선택) — 예: 안감 얼룩은 깨끗이 제거됐습니다. 벨트는 마모가 있어 조심히 사용해 주세요.',r.staff_comment)}${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button><p id="care-message" role="status"></p></section>`;
-  out.querySelector('#cancel-care').onclick=()=>careExisting(item,out);
+  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div><label>작업 내용</label>${careChecks(careServices(r))}<label>사진 (선택, 여러 장 가능)</label>${carePhotoPicker(carePhotoList(r))}<input type="file" accept="image/*" multiple id="care-photos"><p id="photo-preview" class="muted"></p><label for="care-comment">고객에게 보이는 코멘트 (선택)</label>${carePresetChips('care-comment')}<textarea id="care-comment" placeholder="위 버튼을 누르거나 직접 입력">${esc(r.staff_comment||'')}</textarea>${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button><p id="care-message" role="status"></p></section>`;
+  out.querySelector('#cancel-care').onclick=()=>careExisting(item,out);bindPresetChips(out);
   out.querySelector('#care-photos').onchange=e=>{out.querySelector('#photo-preview').textContent=e.target.files.length?`새 사진 ${e.target.files.length}장 선택됨`:'';};
   out.querySelector('#save-care').onclick=async()=>{
     const button=out.querySelector('#save-care'),msg=out.querySelector('#care-message');button.disabled=true;msg.className='muted';msg.textContent='저장 중…';
