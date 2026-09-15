@@ -50,31 +50,43 @@ function bindPresetChips(scope) {
   scope.querySelectorAll('.preset-groups').forEach(g=>{const ta=scope.querySelector('#'+g.dataset.target);g.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const t=b.dataset.text;if(ta.value.includes(t))return;ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+t;ta.dispatchEvent(new Event('input'));});});
 }
 function careChecked(scope) { return [...scope.querySelectorAll('.checks input:checked')].map(x=>x.value); }
-// Admin: existing photos shown as a selectable grid (checked = keep). Unchecking removes the photo on save.
+// Admin photos: existing photos (X = delete now) + pending photos picked one by one (X = remove before saving).
 function carePhotoPicker(urls) {
   const safe=(urls||[]).map(careUrl).filter(Boolean);
-  return safe.length?`<p class="muted">기존 사진 ${safe.length}장 · 체크를 해제하면 저장할 때 삭제됩니다.</p><div class="photo-picker">${safe.map((url,i)=>`<label><input type="checkbox" class="keep-photo" value="${esc(url)}" checked><img src="${esc(url)}" alt="기존 사진 ${i+1}" loading="lazy"></label>`).join('')}</div>`:'';
+  return `<div class="photo-picker" id="existing-photos">${safe.map((url,i)=>`<figure data-url="${esc(url)}"><img src="${esc(url)}" alt="기존 사진 ${i+1}" loading="lazy"><button type="button" class="photo-x del-existing" data-url="${esc(url)}" aria-label="사진 삭제">×</button></figure>`).join('')}</div>`;
+}
+function carePhotoInput(id) {
+  return `<div class="photo-add"><label class="button secondary photo-add-btn" for="${id}">＋ 사진 추가</label><input type="file" accept="image/*" multiple id="${id}" hidden><span class="muted" id="${id}-count"></span></div><div class="photo-picker pending" id="${id}-pending"></div>`;
+}
+function bindPhotoInput(scope,id,pending) {
+  const input=scope.querySelector('#'+id), grid=scope.querySelector('#'+id+'-pending'), count=scope.querySelector('#'+id+'-count');
+  const draw=()=>{grid.innerHTML=pending.map((f,i)=>`<figure><img src="${f._url}" alt="새 사진 ${i+1}"><button type="button" class="photo-x del-pending" data-i="${i}" aria-label="사진 빼기">×</button></figure>`).join('');count.textContent=pending.length?`새 사진 ${pending.length}장 (저장 시 업로드)`:'';grid.querySelectorAll('.del-pending').forEach(b=>b.onclick=()=>{const f=pending.splice(+b.dataset.i,1)[0];try{URL.revokeObjectURL(f._url)}catch{}draw();});};
+  input.onchange=()=>{for(const f of input.files){f._url=URL.createObjectURL(f);pending.push(f);}input.value='';draw();};
+  draw();
 }
 function careExisting(item,out) {
   const records=careSort(item.service_records||[]);
-  out.innerHTML=`<article class="record"><strong>${esc(item.public_code)}</strong><p>${careText(item.brand)} · ${careText(item.item_type)}</p><p class="muted">관리자용 고객 정보: ${careText(item.customer_name)} · ${careText(item.customer_phone)} · 지점 ${esc((storeList.find(s=>s.code===item.store_code)||{}).name||item.store_code||'HQ')}</p>${records.length?`<ul class="record-list">${records.map((r,i)=>`<li><span>${careFmt(r.received_on)} · ${esc(careServices(r).join(', ')||'작업 미등록')}${carePhotoList(r).length?` · 사진 ${carePhotoList(r).length}장`:''}${r.staff_comment?' · 코멘트':''}</span><button data-edit-care="${i}">수정</button></li>`).join('')}</ul>`:'<p class="muted">아직 케어 기록이 없습니다.</p>'}<button id="add-care">새 케어 추가</button>${labelButton(item.public_code)}</article>`;
+  out.innerHTML=`<article class="record"><strong>${esc(item.public_code)}</strong><p>${careText(item.brand)} · ${careText(item.item_type)}</p><p class="muted">관리자용 고객 정보: ${careText(item.customer_name)} · ${careText(item.customer_phone)} · 지점 ${esc((storeList.find(s=>s.code===item.store_code)||{}).name||item.store_code||'HQ')}</p>${records.length?`<ul class="record-list">${records.map((r,i)=>`<li><span>${careFmt(r.received_on)} · ${esc(careServices(r).join(', ')||'작업 미등록')}${carePhotoList(r).length?` · 사진 ${carePhotoList(r).length}장`:''}${r.staff_comment?' · 코멘트':''}</span><button data-edit-care="${i}">수정</button></li>`).join('')}</ul>`:'<p class="muted">아직 케어 기록이 없습니다.</p>'}<button id="add-care">새 케어 추가</button>${labelButton(item.public_code)}<button class="secondary danger" id="delete-item">물건 삭제 (QR 폐기)</button></article>`;
+  out.querySelector('#delete-item').onclick=async()=>{if(!confirm(`${item.public_code} 물건과 케어 기록 ${records.length}건을 모두 삭제할까요? 되돌릴 수 없습니다.`))return;const r1=await sb.from('service_records').delete().eq('item_id',item.id);if(r1.error){alert('삭제 실패: '+r1.error.message);return;}const r2=await sb.from('items').delete().eq('id',item.id);if(r2.error){alert('삭제 실패: '+r2.error.message);return;}out.innerHTML='<p class="success" role="status">물건을 삭제했습니다. 해당 QR은 더 이상 조회되지 않습니다.</p>';};
   out.querySelectorAll('[data-edit-care]').forEach(b=>b.onclick=()=>careEditor(item,records[Number(b.dataset.editCare)]));
   out.querySelector('#add-care').onclick=()=>careEditor(item);bindLabelButtons(out);
 }
 function careEditor(item,r={}) {
   const out=document.querySelector('#found');
-  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div>${storeSelect('edit-store',item.store_code||'HQ')}<label>작업 내용</label>${careChecks(careServices(r))}<label>사진 (선택, 여러 장 가능)</label>${carePhotoPicker(carePhotoList(r))}<input type="file" accept="image/*" multiple id="care-photos"><p id="photo-preview" class="muted"></p><label for="care-comment">고객에게 보이는 코멘트 (선택)</label>${carePresetChips('care-comment')}<textarea id="care-comment" placeholder="위 버튼을 누르거나 직접 입력">${esc(r.staff_comment||'')}</textarea>${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button><p id="care-message" role="status"></p></section>`;
+  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div>${storeSelect('edit-store',item.store_code||'HQ')}<label>작업 내용</label>${careChecks(careServices(r))}<label>사진 (선택 · 찍을 때마다 추가됨)</label>${carePhotoPicker(carePhotoList(r))}${carePhotoInput('care-photos')}<label for="care-comment">고객에게 보이는 코멘트 (선택)</label>${carePresetChips('care-comment')}<textarea id="care-comment" placeholder="위 버튼을 누르거나 직접 입력">${esc(r.staff_comment||'')}</textarea>${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button>${r.id?'<button class="secondary danger" id="delete-care">이 케어 기록 삭제</button>':''}<p id="care-message" role="status"></p></section>`;
   out.querySelector('#cancel-care').onclick=()=>careExisting(item,out);bindPresetChips(out);bindStorePick(out);
-  out.querySelector('#care-photos').onchange=e=>{out.querySelector('#photo-preview').textContent=e.target.files.length?`새 사진 ${e.target.files.length}장 선택됨`:'';};
+  const pending=[];bindPhotoInput(out,'care-photos',pending);
+  let existing=carePhotoList(r);
+  out.querySelectorAll('.del-existing').forEach(b=>b.onclick=async()=>{if(!confirm('이 사진을 지금 바로 삭제할까요?'))return;const url=b.dataset.url;const next=existing.filter(u=>u!==url);if(r.id){const res=await sb.from('service_records').update({photos:next,before_photos:[],after_photos:[]}).eq('id',r.id);if(res.error){alert('삭제 실패: '+res.error.message);return;}r.photos=next;r.before_photos=[];r.after_photos=[];}existing=next;b.closest('figure').remove();});
+  out.querySelector('#delete-care')&&(out.querySelector('#delete-care').onclick=async()=>{if(!confirm(`${careFmt(r.received_on)} 케어 기록을 삭제할까요? 되돌릴 수 없습니다.`))return;const res=await sb.from('service_records').delete().eq('id',r.id);if(res.error){alert('삭제 실패: '+res.error.message);return;}item.service_records=(item.service_records||[]).filter(x=>x.id!==r.id);careExisting(item,out);out.insertAdjacentHTML('afterbegin','<p class="success" role="status">케어 기록을 삭제했습니다.</p>');});
   out.querySelector('#save-care').onclick=async()=>{
     const button=out.querySelector('#save-care'),msg=out.querySelector('#care-message');button.disabled=true;msg.className='muted';msg.textContent='저장 중…';
     try {
       const received=out.querySelector('#care-received').value;
       if(!received)throw Error('케어일을 입력하세요.');
       const staff_comment=out.querySelector('#care-comment').value.trim();careValidateComment(item,staff_comment);
-      const keep=[...out.querySelectorAll('.keep-photo:checked')].map(x=>x.value);
-      const added=await upload(out.querySelector('#care-photos').files,item.public_code,'care');
-      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:careChecked(out),processes:[],photos:[...keep,...added],before_photos:[],after_photos:[],staff_comment,notes:out.querySelector('#care-private').value};
+      const added=await upload(pending,item.public_code,'care');
+      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:careChecked(out),processes:[],photos:[...existing,...added],before_photos:[],after_photos:[],staff_comment,notes:out.querySelector('#care-private').value};
       const result=r.id?await sb.from('service_records').update(record).eq('id',r.id).select().single():await sb.from('service_records').insert(record).select().single();if(result.error)throw result.error;
       const itemValues={brand:out.querySelector('#edit-brand').value.trim(),store_code:out.querySelector('#edit-store').value};const update=await sb.from('items').update(itemValues).eq('id',item.id).select('id').single();if(update.error)throw update.error;
       Object.assign(item,itemValues);item.service_records=[...(item.service_records||[]).filter(x=>x.id!==result.data.id),result.data];
