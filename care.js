@@ -29,6 +29,12 @@ async function careCustomer(code) {
   if(error){app.innerHTML='<section class="card"><h1>이력을 불러오지 못했습니다</h1><p class="muted">잠시 후 다시 시도해 주세요.</p><button id="retry-care">다시 시도</button></section>';document.querySelector('#retry-care').onclick=()=>careCustomer(code);return;}
   if(!data?.item){app.innerHTML='<section class="care-hero"><h1>등록된 이력이 없습니다</h1><p class="muted">QR의 관리번호를 확인해 주세요.</p></section>';return;}
   renderCarePage(data);
+  careStaffLink();
+}
+// Logged-in staff (the shop) get a small link back to the admin screen; customers never see it.
+async function careStaffLink() {
+  try { const {data:{session}}=await sb.auth.getSession(); if(!session||location.hash==='#admin') return;
+    document.querySelector('.care-footer')?.insertAdjacentHTML('beforeend','<p class="staff-link"><a href="#admin">관리자 화면으로 →</a></p>'); } catch {}
 }
 function careInput(id,label,value='',type='text') {return `<label for="${id}">${label}</label><input id="${id}" type="${type}" value="${esc(value||'')}">`;}
 function careArea(id,label,value='') {return `<label for="${id}">${label}</label><textarea id="${id}">${esc(value||'')}</textarea>`;}
