@@ -25,6 +25,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const image: string = String(body.image ?? "");
+    const imageBefore: string = String(body.image_before ?? "");
     const mediaType: string = String(body.media_type ?? "image/jpeg");
     const itemTypes: string[] = Array.isArray(body.item_types) ? body.item_types.map(String) : [];
     const services: string[] = Array.isArray(body.services) ? body.services.map(String) : [];
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
     const season = month >= 10 || month <= 2 ? "겨울(한창 입는 시기)" : month <= 4 ? "봄(겨울옷은 보관 직전)" : month <= 8 ? "여름(겨울옷은 보관 중)" : "가을(겨울옷 꺼내 입기 시작)";
     const prompt = `당신은 프리미엄 세탁 브랜드 '세탁플랜'의 20년 경력 케어 전문가입니다. 세탁·케어가 끝난 물건 사진을 보고, 고객에게 전달할 케어 완료 안내를 작성해 주세요.
 오늘은 ${month}월, 계절은 ${season}입니다.
+${imageBefore ? "사진이 두 장입니다: 첫 번째는 케어 전, 두 번째는 케어 후입니다. 두 사진을 비교해 달라진 점(밝기·볼륨·결·색감·정돈된 형태 등)을 comment 1문장에 긍정적으로 담으세요. 예: '처음 맡기셨을 때보다 한층 밝고 정돈된 모습으로 돌아왔습니다.' 케어 전 상태를 부정적으로 묘사하지 마세요." : ""}
 
 품목 목록(가능하면 이 중에서 고르고, 정말 없으면 짧은 한국어 명사로 새로 적으세요. '기타'는 마지막 수단):
 ${itemTypes.join(" / ")}
@@ -68,6 +70,7 @@ comment 작성 규칙(고객이 QR로 보는 문장입니다):
         messages: [{
           role: "user",
           content: [
+            ...(imageBefore ? [{ type: "text", text: "케어 전 사진:" }, { type: "image", source: { type: "base" + "64", media_type: mediaType, data: imageBefore } }, { type: "text", text: "케어 후 사진:" }] : []),
             { type: "image", source: { type: "base" + "64", media_type: mediaType, data: image } },
             { type: "text", text: prompt },
           ],
