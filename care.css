@@ -7,3 +7,6 @@ header{background:#0A0A0A;border-bottom:1px solid #292925;height:76px}header a{c
 
 .ai-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 14px}
 .ai-row #ai-status{font-size:.92em}
+
+.photo-tag{position:absolute;left:4px;bottom:4px;margin:0;padding:3px 8px;min-height:0;font-size:11px;border-radius:12px;background:rgba(20,20,19,.85);color:#a8a69d;border:1px solid #3a3930}.photo-tag.before{background:#3a2a10;color:#f4d77d;border-color:#7a5d1c}.photo-tag.after{background:#14301b;color:#99d7a2;border-color:#2f6b3c}.tag-help{font-size:12px;margin:0 0 6px}.tag-help b{color:#e5c668}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}.compare figure{margin:0}.compare img{width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #292925;border-radius:6px;display:block}.compare figcaption{text-align:center;font-size:13px;margin-top:6px;color:#a8a69d;letter-spacing:.06em}.compare figure:last-child figcaption{color:#e5c668}

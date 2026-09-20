@@ -31,7 +31,7 @@ async function saveNew(){
   const photos=await upload(newPending,code,'care');
   const item={public_code:code,item_type:itemTypeValue(),brand:document.querySelector('#item-brand').value.trim(),customer_name,customer_phone,notes:document.querySelector('#notes').value,store_code:document.querySelector('#new-store').value};
   const record={services:careChecked(document.querySelector('#new-item')),photos,staff_comment,received_on:document.querySelector('#new-date').value||careDate(),status:'완료'};
-  const saved=await sb.rpc('create_care_item',{item_data:item,record_data:record});if(saved.error)throw saved.error;
+  const saved=await sb.rpc('create_care_item',{item_data:item,record_data:record});if(saved.error)throw saved.error;const bp=photos.filter((u,i)=>newPending[i]._tag==='before'),ap=photos.filter((u,i)=>newPending[i]._tag==='after');if(bp.length||ap.length){const t=await sb.from('service_records').update({before_photos:bp,after_photos:ap}).eq('item_id',saved.data);if(t.error)throw t.error;}
   newPending.length=0;document.querySelector('#new-photos-pending').innerHTML='';document.querySelector('#new-photos-count').textContent='';result.className='success';result.innerHTML='저장됐습니다. 관리번호: <strong>'+esc(code)+'</strong><div class="qr-wrap" id="qr"></div><a class="button" href="/q/'+shortCode(code)+'" target="_blank">고객 화면 열기</a>'+labelButton(code);
   new QRCode(document.querySelector('#qr'),{text:qrUrl(code),width:180,height:180,correctLevel:QRCode.CorrectLevel.M});bindLabelButtons(result);
  }catch(e){result.className='error';result.textContent=e.message;}finally{button.disabled=false;}
@@ -47,7 +47,7 @@ function bindAiSuggest(){const btn=document.querySelector('#ai-suggest');if(!btn
 async function shrinkImage(file,max=1024){const url=URL.createObjectURL(file);try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});const r=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.82).split(',')[1]}finally{URL.revokeObjectURL(url)}}
 async function aiSuggest(){const status=document.querySelector('#ai-status'),btn=document.querySelector('#ai-suggest');if(!newPending.length){status.textContent='먼저 사진을 찍어 주세요.';return}
  btn.disabled=true;status.textContent='AI가 사진을 보는 중…';
- try{const image=await shrinkImage(newPending[0]);const {data,error}=await sb.functions.invoke('suggest-care',{body:{image,media_type:'image/jpeg',item_types:itemTypes.filter(x=>x!=='기타'),services}});
+ try{const afterF=newPending.find(f=>f._tag==='after'),beforeF=newPending.find(f=>f._tag==='before');const image=await shrinkImage(afterF||newPending[0]);const image_before=beforeF&&afterF?await shrinkImage(beforeF):undefined;const {data,error}=await sb.functions.invoke('suggest-care',{body:{image,image_before,media_type:'image/jpeg',item_types:itemTypes.filter(x=>x!=='기타'),services}});
   if(error)throw new Error((await error.context?.json?.().catch(()=>null))?.error||error.message||'AI 호출 실패');if(data?.error)throw new Error(data.error);
   const sel=document.querySelector('#type'),custom=document.querySelector('#type-custom');
   if(data.item_type){if(itemTypes.includes(data.item_type)){sel.value=data.item_type;custom.hidden=true}else{sel.value='__custom';custom.hidden=false;custom.value=data.item_type}}
