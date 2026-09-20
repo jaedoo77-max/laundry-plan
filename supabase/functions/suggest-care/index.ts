@@ -28,6 +28,8 @@ Deno.serve(async (req) => {
     const mediaType: string = String(body.media_type ?? "image/jpeg");
     const itemTypes: string[] = Array.isArray(body.item_types) ? body.item_types.map(String) : [];
     const services: string[] = Array.isArray(body.services) ? body.services.map(String) : [];
+    // AI가 고를 수 있는 작업: 세탁 방식(드라이/물세탁)은 제외 — 케어라벨 확인 후 직원이 직접 체크
+    const aiServices = services.filter((x) => !/드라이|물세탁|손세탁/.test(x));
     if (!image || image.length < 100) return json({ error: "사진이 없습니다" }, 400);
     if (image.length > 6_000_000) return json({ error: "사진이 너무 큽니다" }, 413);
 
@@ -41,12 +43,12 @@ Deno.serve(async (req) => {
 ${itemTypes.join(" / ")}
 
 작업 내용 목록(이 중에서만 고르세요, 여러 개 가능. 이 품목에 통상 하는 케어를 고르세요):
-${services.join(" / ")}
+${aiServices.join(" / ")}
 
 comment 작성 규칙(고객이 QR로 보는 문장입니다):
 - 2~3문장, 총 120자 이내. 존댓말. 과장 없이 신뢰감 있게.
-- 1문장: 이 품목의 소재·특성에 맞춰 어떤 케어를 했는지 구체적으로.
-- 2문장: 관리 팁 한 가지. 오늘 계절 기준으로 이 물건을 지금 사용할 시기면 '사용하면서' 지키면 좋은 팁(예: 패딩은 비 맞은 뒤 그늘에서 말리기, 스니커즈는 하루 신고 하루 쉬기). 시즌이 끝나 넣어둘 시기일 때만 보관 팁. 지금 입을 옷에 보관 얘기를 하지 마세요.
+- 1문장: 이 품목의 소재·특성에 맞춰 '집중 케어'를 정성껏 마쳤다는 내용. 어떤 부분(충전재·볼륨·갑피·가죽결·시트·벨트 등)을 신경 썼는지는 언급해도 되지만, 세탁 방식은 절대 쓰지 마세요. 금지어: 드라이클리닝, 물세탁, 손세탁, 세척, 스팀, 세제, 온도, 건조기, 발수코팅 등 공정·약제 이름 일체. (케어라벨과 어긋나면 분쟁이 됩니다.)
+- 2문장: 오래 쓰기 위한 관리 팁 한 가지. 사용 중 팁이든 보관 팁이든 좋습니다. 오늘 계절을 참고해 자연스럽게(입는 시기면 사용 팁, 넣어둘 시기면 보관 팁을 우선).
 - 브랜드명이 확실할 때만 자연스럽게 언급. 얼룩·손상·오염 같은 부정적 표현은 쓰지 마세요(이미 케어 완료된 상태입니다).
 - "세탁플랜"이라는 이름은 넣지 마세요(따로 붙습니다).
 - 이모지·느낌표·해시태그 금지.
@@ -81,7 +83,7 @@ comment 작성 규칙(고객이 QR로 보는 문장입니다):
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return json({ error: "AI 응답을 해석하지 못했습니다", raw: text.slice(0, 300) }, 502);
     const out = JSON.parse(m[0]);
-    const svcSet = new Set(services);
+    const svcSet = new Set(aiServices);
     return json({
       item_type: String(out.item_type ?? "").trim().slice(0, 40),
       brand: String(out.brand ?? "").trim().slice(0, 40),
