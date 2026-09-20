@@ -47,14 +47,13 @@ function bindAiSuggest(){const btn=document.querySelector('#ai-suggest');if(!btn
 async function shrinkImage(file,max=1024){const url=URL.createObjectURL(file);try{const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});const r=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.82).split(',')[1]}finally{URL.revokeObjectURL(url)}}
 async function aiSuggest(){const status=document.querySelector('#ai-status'),btn=document.querySelector('#ai-suggest');if(!newPending.length){status.textContent='먼저 사진을 찍어 주세요.';return}
  btn.disabled=true;status.textContent='AI가 사진을 보는 중…';
- try{const image=await shrinkImage(newPending[0]);const {data,error}=await sb.functions.invoke('suggest-care',{body:{image,media_type:'image/jpeg',item_types:itemTypes.filter(x=>x!=='기타'),services,presets:commentPresets}});
+ try{const image=await shrinkImage(newPending[0]);const {data,error}=await sb.functions.invoke('suggest-care',{body:{image,media_type:'image/jpeg',item_types:itemTypes.filter(x=>x!=='기타'),services}});
   if(error)throw new Error((await error.context?.json?.().catch(()=>null))?.error||error.message||'AI 호출 실패');if(data?.error)throw new Error(data.error);
   const sel=document.querySelector('#type'),custom=document.querySelector('#type-custom');
   if(data.item_type){if(itemTypes.includes(data.item_type)){sel.value=data.item_type;custom.hidden=true}else{sel.value='__custom';custom.hidden=false;custom.value=data.item_type}}
   const brand=document.querySelector('#item-brand');if(data.brand&&!brand.value)brand.value=data.brand;
   if(data.services?.length){document.querySelectorAll('#new-item .checks input[type=checkbox]').forEach(c=>c.checked=data.services.includes(c.value))}
   const ta=document.querySelector('#new-comment');if(data.comment&&!ta.value.trim())ta.value=data.comment;
-  const notes=document.querySelector('#notes');if(data.notes&&!notes.value.trim())notes.value='[AI 관찰] '+data.notes;
   status.textContent=data.item_type?`추천 완료 · 확인 후 수정하세요${data.brand?' · 브랜드는 꼭 확인':''}`:'물건을 알아보지 못했어요. 직접 선택해 주세요.';
  }catch(e){status.textContent='AI 추천 실패: '+e.message}finally{btn.disabled=false}}
 function itemTypeValue(){const sel=document.querySelector('#type');if(sel.value!=='__custom')return sel.value;const v=document.querySelector('#type-custom').value.trim();if(!v)throw new Error('품목을 직접 입력해 주세요.');return v}
