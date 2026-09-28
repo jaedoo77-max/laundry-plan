@@ -35,7 +35,7 @@ function renderCarePage(payload) {
 }
 async function careCustomer(code) {
   document.body.classList.toggle('public-page',!!code);
-  if(!code){app.innerHTML='<section class="care-hero"><p class="eyebrow">세탁플랜</p><h1>케어의 모든 기록.</h1><p class="muted">제품의 QR 코드를 스캔하면 케어 이력을 확인할 수 있습니다.</p><a class="button" href="#admin">관리자 화면으로</a></section>';return;}
+  if(!code){app.innerHTML='<section class="care-hero"><p class="eyebrow">세탁플랜</p><h1>케어의 모든 기록.</h1><p class="muted">제품의 QR 코드를 스캔하면 케어 이력을 확인할 수 있습니다.</p><button class="button" id="go-admin">관리자 화면으로</button></section>';document.querySelector('#go-admin').onclick=()=>{app.innerHTML='<section class="card"><p class="loading">관리자 화면 불러오는 중…</p></section>';if(location.hash==='#admin')route();else location.hash='#admin';};return;}
   app.innerHTML='<p role="status" class="muted">케어 이력을 불러오고 있습니다…</p>';
   const {data,error}=await sb.rpc('get_care_history',{lookup_code:code});
   if(location.hash==='#admin')return;
