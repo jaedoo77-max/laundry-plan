@@ -10,3 +10,15 @@ header{background:#0A0A0A;border-bottom:1px solid #292925;height:76px}header a{c
 
 .photo-tag{position:absolute;left:4px;bottom:4px;margin:0;padding:3px 8px;min-height:0;font-size:11px;border-radius:12px;background:rgba(20,20,19,.85);color:#a8a69d;border:1px solid #3a3930}.photo-tag.before{background:#3a2a10;color:#f4d77d;border-color:#7a5d1c}.photo-tag.after{background:#14301b;color:#99d7a2;border-color:#2f6b3c}.tag-help{font-size:12px;margin:0 0 6px}.tag-help b{color:#e5c668}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}.compare figure{margin:0}.compare img{width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #292925;border-radius:6px;display:block}.compare figcaption{text-align:center;font-size:13px;margin-top:6px;color:#a8a69d;letter-spacing:.06em}.compare figure:last-child figcaption{color:#e5c668}
+
+.lightbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.97);display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);touch-action:pan-y}
+.lightbox figure{margin:0;max-width:100vw;max-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.lightbox img{max-width:100vw;max-height:88vh;object-fit:contain;display:block;user-select:none;-webkit-user-select:none}
+.lightbox figcaption{color:#e5c668;font-size:15px;letter-spacing:.08em;margin-top:12px}
+.lightbox button{position:absolute;margin:0;min-height:0;background:rgba(20,20,19,.7);color:#eee;border:1px solid #3a3930;border-radius:50%;width:44px;height:44px;font-size:28px;line-height:1;padding:0;display:grid;place-items:center}
+.lb-close{top:calc(14px + env(safe-area-inset-top,0));right:14px}
+.lb-prev{left:10px;top:50%;transform:translateY(-50%)}.lb-next{right:10px;top:50%;transform:translateY(-50%)}
+.lb-count{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom,0));left:0;right:0;text-align:center;color:#a8a69d;font-size:13px;letter-spacing:.1em}
+body.lb-open{overflow:hidden}
+.care-list .care-photos{grid-template-columns:repeat(auto-fill,92px)}
+.care-photos a{cursor:zoom-in}.compare figure{cursor:zoom-in}
