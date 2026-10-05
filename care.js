@@ -86,7 +86,8 @@ function carePresetChips(targetId) {
 function bindPresetChips(scope) {
   scope.querySelectorAll('.preset-groups').forEach(g=>{const ta=scope.querySelector('#'+g.dataset.target);g.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const t=b.dataset.text;if(ta.value.includes(t))return;ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+t;ta.dispatchEvent(new Event('input'));});});
 }
-function careChecked(scope) { return [...scope.querySelectorAll('.checks input:checked')].map(x=>x.value); }
+const DEFAULT_SERVICE='프리미엄 케어';
+function careChecked(scope) { const boxes=[...scope.querySelectorAll('.checks input')]; if(!boxes.length) return [DEFAULT_SERVICE]; return boxes.filter(x=>x.checked).map(x=>x.value); }
 // Admin photos: existing photos (X = delete now) + pending photos picked one by one (X = remove before saving).
 const TAG_LABEL={'':'구분 없음',before:'케어 전',after:'케어 후'};
 function careNextTag(tag){return tag==='before'?'after':tag==='after'?'':'before'}
@@ -113,7 +114,7 @@ function careExisting(item,out) {
 }
 function careEditor(item,r={}) {
   const out=document.querySelector('#found');
-  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div>${storeSelect('edit-store',item.store_code||'HQ')}<label>작업 내용</label>${careChecks(careServices(r))}<label>사진 (선택 · 찍을 때마다 추가됨)</label>${carePhotoPicker(carePhotoList(r),careTagMap(r))}${carePhotoInput('care-photos')}<label for="care-comment">고객에게 보이는 코멘트 (선택)</label><textarea id="care-comment" placeholder="고객에게 보이는 코멘트를 직접 입력">${esc(r.staff_comment||'')}</textarea>${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button>${r.id?'<button class="secondary danger" id="delete-care">이 케어 기록 삭제</button>':''}<p id="care-message" role="status"></p></section>`;
+  out.innerHTML=`<section class="card"><h2>${esc(item.public_code)} · ${r.id?'케어 수정':'새 케어 추가'}</h2><div class="grid"><div>${careInput('care-received','케어일',r.received_on||careDate(),'date')}</div><div>${careInput('edit-brand','브랜드',item.brand)}</div></div>${storeSelect('edit-store',item.store_code||'HQ')}<label>사진 (선택 · 찍을 때마다 추가됨)</label>${carePhotoPicker(carePhotoList(r),careTagMap(r))}${carePhotoInput('care-photos')}<label for="care-comment">고객에게 보이는 코멘트 (선택)</label><textarea id="care-comment" placeholder="고객에게 보이는 코멘트를 직접 입력">${esc(r.staff_comment||'')}</textarea>${careArea('care-private','내부 메모 (관리자 전용)',r.notes)}<button id="save-care">저장</button><button class="secondary" id="cancel-care">돌아가기</button>${r.id?'<button class="secondary danger" id="delete-care">이 케어 기록 삭제</button>':''}<p id="care-message" role="status"></p></section>`;
   out.querySelector('#cancel-care').onclick=()=>careExisting(item,out);bindPresetChips(out);bindStorePick(out);
   const pending=[];bindPhotoInput(out,'care-photos',pending);
   let existing=carePhotoList(r);const tags=careTagMap(r);bindTagToggles(out,tags);
@@ -126,7 +127,7 @@ function careEditor(item,r={}) {
       if(!received)throw Error('케어일을 입력하세요.');
       const staff_comment=out.querySelector('#care-comment').value.trim();careValidateComment(item,staff_comment);
       const added=await upload(pending,item.public_code,'care');
-      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:careChecked(out),processes:[],photos:[...existing,...added],before_photos:[...existing.filter(u=>tags[u]==='before'),...added.filter((u,i)=>pending[i]._tag==='before')],after_photos:[...existing.filter(u=>tags[u]==='after'),...added.filter((u,i)=>pending[i]._tag==='after')],staff_comment,notes:out.querySelector('#care-private').value};
+      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:(r.id&&careServices(r).length)?careServices(r):careChecked(out),processes:[],photos:[...existing,...added],before_photos:[...existing.filter(u=>tags[u]==='before'),...added.filter((u,i)=>pending[i]._tag==='before')],after_photos:[...existing.filter(u=>tags[u]==='after'),...added.filter((u,i)=>pending[i]._tag==='after')],staff_comment,notes:out.querySelector('#care-private').value};
       const result=r.id?await sb.from('service_records').update(record).eq('id',r.id).select().single():await sb.from('service_records').insert(record).select().single();if(result.error)throw result.error;
       const itemValues={brand:out.querySelector('#edit-brand').value.trim(),store_code:out.querySelector('#edit-store').value};const update=await sb.from('items').update(itemValues).eq('id',item.id).select('id').single();if(update.error)throw update.error;
       Object.assign(item,itemValues);item.service_records=[...(item.service_records||[]).filter(x=>x.id!==result.data.id),result.data];

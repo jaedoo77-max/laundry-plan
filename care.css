@@ -22,3 +22,5 @@ header{background:#0A0A0A;border-bottom:1px solid #292925;height:76px}header a{c
 body.lb-open{overflow:hidden}
 .care-list .care-photos{grid-template-columns:repeat(auto-fill,92px)}
 .care-photos a{cursor:zoom-in}.compare figure{cursor:zoom-in}
+
+.suggest{position:relative;margin-top:-6px;margin-bottom:10px;border:1px solid #45443d;border-radius:8px;background:#141413;overflow:hidden}.suggest-item{display:flex;justify-content:space-between;gap:12px;width:100%;margin:0;padding:12px 14px;min-height:0;background:transparent;color:#eee;border:0;border-bottom:1px solid #292925;border-radius:0;text-align:left;font-size:15px}.suggest-item:last-child{border-bottom:0}.suggest-item strong{font-weight:600}.suggest-item span{color:#a8a69d;letter-spacing:.02em}
