@@ -3,7 +3,7 @@
 // 호출: 관리자 로그인 상태에서 supabase.functions.invoke('suggest-care', { body: {...} })
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (body: unknown, status = 200) =>
@@ -16,19 +16,32 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY가 설정되지 않았습니다. Supabase → Edge Functions → Secrets에서 추가하세요." }, 500);
 
-    // 관리자(로그인 사용자)만 사용 가능
-    const auth = req.headers.get("Authorization") ?? "";
-    const supaUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const who = await fetch(`${supaUrl}/auth/v1/user`, { headers: { Authorization: auth, apikey: anon } });
-    if (!who.ok) return json({ error: "로그인이 필요합니다" }, 401);
+    // 사용 가능: QR Laundry 관리자 로그인 사용자, 또는 x-admin-token 을 가진 관리자 앱 서버
+    const adminToken = Deno.env.get("ADMIN_APP_TOKEN") ?? "";
+    const given = req.headers.get("x-admin-token") ?? "";
+    let allowed = false;
+    if (given) {
+      const x = new TextEncoder().encode(given), y = new TextEncoder().encode(adminToken);
+      let diff = x.length ^ y.length;
+      for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+      allowed = adminToken.length >= 32 && diff === 0;
+      if (!allowed) return json({ error: "x-admin-token 이 올바르지 않습니다" }, 401);
+    } else {
+      const auth = req.headers.get("Authorization") ?? "";
+      const supaUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      const who = await fetch(`${supaUrl}/auth/v1/user`, { headers: { Authorization: auth, apikey: anon } });
+      if (!who.ok) return json({ error: "로그인이 필요합니다" }, 401);
+    }
 
     const body = await req.json();
-    const image: string = String(body.image ?? "");
-    const imageBefore: string = String(body.image_before ?? "");
+    const image: string = String(body.image ?? "").replace(/^data:[^,]*,/, "");
+    const imageBefore: string = String(body.image_before ?? "").replace(/^data:[^,]*,/, "");
     const mediaType: string = String(body.media_type ?? "image/jpeg");
-    const itemTypes: string[] = Array.isArray(body.item_types) ? body.item_types.map(String) : [];
-    const services: string[] = Array.isArray(body.services) ? body.services.map(String) : [];
+    const DEFAULT_TYPES = ["명품 패딩", "정장", "티셔츠·의류", "니트·코트", "스니커즈", "명품 가방", "카시트", "유모차"];
+    const DEFAULT_SERVICES = ["얼룩제거", "탈취·살균", "발수코팅", "가죽관리", "전체세척", "수선"];
+    const itemTypes: string[] = Array.isArray(body.item_types) && body.item_types.length ? body.item_types.map(String) : DEFAULT_TYPES;
+    const services: string[] = Array.isArray(body.services) && body.services.length ? body.services.map(String) : DEFAULT_SERVICES;
     // AI가 고를 수 있는 작업: 세탁 방식(드라이/물세탁)은 제외 — 케어라벨 확인 후 직원이 직접 체크
     const aiServices = services.filter((x) => !/드라이|물세탁|손세탁/.test(x));
     if (!image || image.length < 100) return json({ error: "사진이 없습니다" }, 400);
