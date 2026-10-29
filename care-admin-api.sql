@@ -35,4 +35,9 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function public.admin_find_items_by_phone(text) from public, anon, authenticated;
 grant execute on function public.admin_find_items_by_phone(text) to service_role;
+-- 3) register-care(service_role)가 쓰는 테이블 권한
+grant usage on schema public to service_role;
+grant select on public.stores to service_role;
+grant select, insert, update, delete on public.items to service_role;
+grant select, insert, update, delete on public.service_records to service_role;
 commit;
