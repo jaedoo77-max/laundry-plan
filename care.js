@@ -119,12 +119,22 @@ function carePhotoPicker(urls,tags={}) {
 }
 function bindTagToggles(scope,tags){scope.querySelectorAll('.tag-existing').forEach(b=>b.onclick=()=>{const url=b.dataset.url;tags[url]=careNextTag(tags[url]||'');b.className='photo-tag tag-existing '+tags[url];b.textContent=TAG_LABEL[tags[url]]})}
 function carePhotoInput(id) {
-  return `<div class="photo-add"><label class="button secondary photo-add-btn" for="${id}">＋ 사진 추가</label><input type="file" accept="image/*" multiple id="${id}" hidden><span class="muted" id="${id}-count"></span></div><p class="muted tag-help">완성품만 찍으면 그대로 두세요. 전·후 비교를 올리려면 사진 아래 버튼을 눌러 <b>케어 전</b> / <b>케어 후</b>를 지정하세요.</p><div class="photo-picker pending" id="${id}-pending"></div>`;
+  const enh=typeof enhancePhoto==='function';
+  return `<div class="photo-add"><label class="button secondary photo-add-btn" for="${id}">＋ 사진 추가</label><input type="file" accept="image/*" multiple id="${id}" hidden><span class="muted" id="${id}-count"></span>${enh?`<label class="enh-switch"><input type="checkbox" id="${id}-enh" ${enhEnabled()?'checked':''}> 사진 자동 보정</label>`:''}</div><p class="muted tag-help">완성품만 찍으면 그대로 두세요. 전·후 비교를 올리려면 사진 아래 버튼을 눌러 <b>케어 전</b> / <b>케어 후</b>를 지정하세요.${enh?' 자동 보정을 켜 두면 배경을 정리한 <b>보정본</b>이 고객 화면에 올라가고, 원본은 따로 보관됩니다. 사진 위 버튼으로 원본/보정본을 고를 수 있어요.':''}</p><div class="photo-picker pending" id="${id}-pending"></div>`;
+}
+function careEnhBadge(f,i){
+  if(f._enhBusy)return `<span class="enh-badge busy">보정 중…</span>`;
+  if(f._enh)return `<button type="button" class="enh-badge enh-toggle ${f._enhOn?'on':''}" data-i="${i}">${f._enhOn?(f._enhCut?'보정본':'색감 보정'):'원본'}</button>`;
+  if(f._enhErr)return `<span class="enh-badge err" title="${esc(f._enhErr)}">원본 사용</span>`;
+  return '';
 }
 function bindPhotoInput(scope,id,pending) {
-  const input=scope.querySelector('#'+id), grid=scope.querySelector('#'+id+'-pending'), count=scope.querySelector('#'+id+'-count');
-  const draw=()=>{grid.innerHTML=pending.map((f,i)=>`<figure><img src="${f._url}" alt="새 사진 ${i+1}"><button type="button" class="photo-x del-pending" data-i="${i}" aria-label="사진 빼기">×</button><button type="button" class="photo-tag tag-pending ${f._tag||''}" data-i="${i}">${TAG_LABEL[f._tag||'']}</button></figure>`).join('');count.textContent=pending.length?`새 사진 ${pending.length}장 (저장 시 업로드)`:'';grid.querySelectorAll('.del-pending').forEach(b=>b.onclick=()=>{const f=pending.splice(+b.dataset.i,1)[0];try{URL.revokeObjectURL(f._url)}catch{}draw();});grid.querySelectorAll('.tag-pending').forEach(b=>b.onclick=()=>{const f=pending[+b.dataset.i];f._tag=careNextTag(f._tag||'');draw();});};
-  input.onchange=()=>{for(const f of input.files){f._url=URL.createObjectURL(f);f._tag='';pending.push(f);}input.value='';draw();};
+  const input=scope.querySelector('#'+id), grid=scope.querySelector('#'+id+'-pending'), count=scope.querySelector('#'+id+'-count'), sw=scope.querySelector('#'+id+'-enh');
+  const draw=()=>{grid.innerHTML=pending.map((f,i)=>`<figure><img src="${f._enhOn&&f._enhUrl?f._enhUrl:f._url}" alt="새 사진 ${i+1}">${careEnhBadge(f,i)}<button type="button" class="photo-x del-pending" data-i="${i}" aria-label="사진 빼기">×</button><button type="button" class="photo-tag tag-pending ${f._tag||''}" data-i="${i}">${TAG_LABEL[f._tag||'']}</button></figure>`).join('');const busy=pending.filter(f=>f._enhBusy).length;count.textContent=pending.length?`새 사진 ${pending.length}장${busy?` · 보정 중 ${busy}장`:''} (저장 시 업로드)`:'';grid.querySelectorAll('.del-pending').forEach(b=>b.onclick=()=>{const f=pending.splice(+b.dataset.i,1)[0];try{URL.revokeObjectURL(f._url);f._enhUrl&&URL.revokeObjectURL(f._enhUrl)}catch{}draw();});grid.querySelectorAll('.tag-pending').forEach(b=>b.onclick=()=>{const f=pending[+b.dataset.i];f._tag=careNextTag(f._tag||'');draw();});grid.querySelectorAll('.enh-toggle').forEach(b=>b.onclick=()=>{const f=pending[+b.dataset.i];f._enhOn=!f._enhOn;draw();});};
+  if(sw)sw.onchange=()=>enhSetEnabled(sw.checked);
+  input.onchange=()=>{for(const f of input.files){f._url=URL.createObjectURL(f);f._tag='';pending.push(f);
+      if(typeof enhancePhoto==='function'&&(!sw||sw.checked)){f._enhOn=true;f._enhBusy=true;f._enhP=enhancePhoto(f).then(r=>{f._enh=r.file;f._enhUrl=r.url;f._enhCut=r.cutout}).catch(e=>{f._enhErr=e.message||String(e);f._enhOn=false}).finally(()=>{f._enhBusy=false;draw()});}}
+    input.value='';draw();};
   draw();
 }
 function careExisting(item,out) {
@@ -148,8 +158,10 @@ function careEditor(item,r={}) {
       const received=out.querySelector('#care-received').value;
       if(!received)throw Error('케어일을 입력하세요.');
       const staff_comment=out.querySelector('#care-comment').value.trim();careValidateComment(item,staff_comment);
-      const added=await upload(pending,item.public_code,'care');
-      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:(r.id&&careServices(r).length)?careServices(r):careChecked(out),processes:[],photos:[...existing,...added],before_photos:[...existing.filter(u=>tags[u]==='before'),...added.filter((u,i)=>pending[i]._tag==='before')],after_photos:[...existing.filter(u=>tags[u]==='after'),...added.filter((u,i)=>pending[i]._tag==='after')],staff_comment,notes:out.querySelector('#care-private').value};
+      if(pending.some(f=>f._enhBusy)){msg.textContent='사진 보정 마무리 중…';}
+      const prep=typeof carePrepare==='function'?await carePrepare(pending):{show:pending,orig:[]};
+      const added=await upload(prep.show,item.public_code,'care');const origAdded=prep.orig.length?await upload(prep.orig,item.public_code,'orig'):[];
+      const record={item_id:item.id,received_on:received,completed_on:received,status:'완료',services:(r.id&&careServices(r).length)?careServices(r):careChecked(out),processes:[],photos:[...existing,...added],before_photos:[...existing.filter(u=>tags[u]==='before'),...added.filter((u,i)=>pending[i]._tag==='before')],after_photos:[...existing.filter(u=>tags[u]==='after'),...added.filter((u,i)=>pending[i]._tag==='after')],staff_comment,notes:out.querySelector('#care-private').value};if(origAdded.length)record.original_photos=[...(r.original_photos||[]),...origAdded];
       const result=r.id?await sb.from('service_records').update(record).eq('id',r.id).select().single():await sb.from('service_records').insert(record).select().single();if(result.error)throw result.error;
       const itemValues={brand:out.querySelector('#edit-brand').value.trim(),store_code:out.querySelector('#edit-store').value,item_type:careTypeValue(out)};const update=await sb.from('items').update(itemValues).eq('id',item.id).select('id').single();if(update.error)throw update.error;
       Object.assign(item,itemValues);item.service_records=[...(item.service_records||[]).filter(x=>x.id!==result.data.id),result.data];

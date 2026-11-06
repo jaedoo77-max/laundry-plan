@@ -28,10 +28,12 @@ async function saveNew(){
   const customer_name=document.querySelector('#customer').value,customer_phone=document.querySelector('#phone').value;
   const staff_comment=document.querySelector('#new-comment').value.trim();careValidateComment({customer_name,customer_phone},staff_comment);
   const code='QL-'+crypto.randomUUID().replaceAll('-','').slice(0,8).toUpperCase();
-  const photos=await upload(newPending,code,'care');
+  if(newPending.some(f=>f._enhBusy))result.textContent='사진 보정 마무리 중…';
+  const prep=typeof carePrepare==='function'?await carePrepare(newPending):{show:newPending,orig:[]};
+  const photos=await upload(prep.show,code,'care');const originals=prep.orig.length?await upload(prep.orig,code,'orig'):[];
   const item={public_code:code,item_type:itemTypeValue(),brand:document.querySelector('#item-brand').value.trim(),customer_name,customer_phone,notes:document.querySelector('#notes').value,store_code:document.querySelector('#new-store').value};
   const record={services:careChecked(document.querySelector('#new-item')),photos,staff_comment,received_on:document.querySelector('#new-date').value||careDate(),status:'완료'};
-  const saved=await sb.rpc('create_care_item',{item_data:item,record_data:record});if(saved.error)throw saved.error;const bp=photos.filter((u,i)=>newPending[i]._tag==='before'),ap=photos.filter((u,i)=>newPending[i]._tag==='after');if(bp.length||ap.length){const t=await sb.from('service_records').update({before_photos:bp,after_photos:ap}).eq('item_id',saved.data);if(t.error)throw t.error;}
+  const saved=await sb.rpc('create_care_item',{item_data:item,record_data:record});if(saved.error)throw saved.error;const bp=photos.filter((u,i)=>newPending[i]._tag==='before'),ap=photos.filter((u,i)=>newPending[i]._tag==='after');{const upd={};if(bp.length||ap.length){upd.before_photos=bp;upd.after_photos=ap}if(originals.length)upd.original_photos=originals;if(Object.keys(upd).length){const t=await sb.from('service_records').update(upd).eq('item_id',saved.data);if(t.error)throw t.error;}}
   newPending.length=0;{const t=document.querySelector('#type');if(t)t.dataset.touched='';}document.querySelector('#new-photos-pending').innerHTML='';document.querySelector('#new-photos-count').textContent='';result.className='success';result.innerHTML='저장됐습니다. 관리번호: <strong>'+esc(code)+'</strong><div class="qr-wrap" id="qr"></div><a class="button" href="/q/'+shortCode(code)+'" target="_blank">고객 화면 열기</a>'+labelButton(code);
   new QRCode(document.querySelector('#qr'),{text:qrUrl(code),width:180,height:180,correctLevel:QRCode.CorrectLevel.M});bindLabelButtons(result);
  }catch(e){result.className='error';result.textContent=e.message;}finally{button.disabled=false;}
