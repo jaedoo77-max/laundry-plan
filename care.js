@@ -23,13 +23,31 @@ function careLightbox(urls,start=0,caps=[]){
   const box=document.createElement('div');box.className='lightbox';box.innerHTML='<button class="lb-close" aria-label="닫기">×</button><button class="lb-prev" aria-label="이전">‹</button><figure><img alt=""><figcaption></figcaption></figure><button class="lb-next" aria-label="다음">›</button><div class="lb-count"></div>';
   document.body.appendChild(box);document.body.classList.add('lb-open');
   const img=box.querySelector('img'),cap=box.querySelector('figcaption'),cnt=box.querySelector('.lb-count');
-  const show=()=>{i=(i+urls.length)%urls.length;img.src=urls[i];cap.textContent=caps[i]||'';cap.hidden=!caps[i];cnt.textContent=`${i+1} / ${urls.length}`;box.querySelector('.lb-prev').hidden=box.querySelector('.lb-next').hidden=urls.length<2;};
+  let show=()=>{i=(i+urls.length)%urls.length;img.src=urls[i];cap.textContent=caps[i]||'';cap.hidden=!caps[i];cnt.textContent=`${i+1} / ${urls.length}`;box.querySelector('.lb-prev').hidden=box.querySelector('.lb-next').hidden=urls.length<2;};
   const close=()=>{box.remove();document.body.classList.remove('lb-open');document.removeEventListener('keydown',onKey)};
   const onKey=e=>{if(e.key==='Escape')close();else if(e.key==='ArrowLeft'){i--;show()}else if(e.key==='ArrowRight'){i++;show()}};
   box.querySelector('.lb-close').onclick=close;box.querySelector('.lb-prev').onclick=e=>{e.stopPropagation();i--;show()};box.querySelector('.lb-next').onclick=e=>{e.stopPropagation();i++;show()};
   box.onclick=e=>{if(e.target===box||e.target.tagName==='FIGURE')close()};
-  let sx=0,sy=0;box.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
-  box.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){i+=dx<0?1:-1;show()}else if(dy>80&&Math.abs(dx)<40)close()},{passive:true});
+  // 확대: 두 손가락 벌리기 / 두 번 탭 / PC는 휠·더블클릭. 확대 중엔 한 손가락으로 이동, 넘기기·닫기는 원래 크기일 때만.
+  let s=1,tx=0,ty=0;const clampT=()=>{if(s<=1){s=1;tx=0;ty=0;return}const mx=img.offsetWidth*(s-1)/2,my=img.offsetHeight*(s-1)/2;tx=Math.max(-mx,Math.min(mx,tx));ty=Math.max(-my,Math.min(my,ty))};
+  const apply=()=>{clampT();img.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;box.classList.toggle('zoomed',s>1)};
+  const zoomAt=(ns,cx,cy)=>{ns=Math.max(1,Math.min(4,ns));const r=img.getBoundingClientRect(),ox=cx-(r.left+r.width/2),oy=cy-(r.top+r.height/2);tx-=ox*(ns/s-1);ty-=oy*(ns/s-1);s=ns;apply()};
+  const reset=()=>{s=1;tx=0;ty=0;apply()};
+  const show0=show;show=()=>{reset();show0()};
+  const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+  let sx=0,sy=0,pinch=0,ps=1,px=0,py=0,moved=false,lastTap=0,multi=false;
+  box.addEventListener('touchstart',e=>{if(e.target.closest('button'))return;const t=e.touches;moved=false;if(t.length===2){multi=true;pinch=dist(t);ps=s}else if(t.length===1){sx=px=t[0].clientX;sy=py=t[0].clientY}},{passive:true});
+  box.addEventListener('touchmove',e=>{if(e.target.closest('button'))return;const t=e.touches;e.preventDefault();if(t.length===2&&pinch){const cx=(t[0].clientX+t[1].clientX)/2,cy=(t[0].clientY+t[1].clientY)/2;zoomAt(ps*dist(t)/pinch,cx,cy);moved=true}else if(t.length===1&&s>1){tx+=t[0].clientX-px;ty+=t[0].clientY-py;px=t[0].clientX;py=t[0].clientY;apply();moved=true}},{passive:false});
+  box.addEventListener('touchend',e=>{if(e.target.closest('button'))return;if(e.touches.length){pinch=0;if(e.touches.length===1){px=e.touches[0].clientX;py=e.touches[0].clientY}return}pinch=0;const c=e.changedTouches[0],dx=c.clientX-sx,dy=c.clientY-sy;
+    if(multi){multi=false;return}
+    if(!moved&&Math.abs(dx)<10&&Math.abs(dy)<10){const now=Date.now();if(now-lastTap<300){lastTap=0;if(s>1)reset();else zoomAt(2.5,c.clientX,c.clientY);e.preventDefault();return}lastTap=now;return}
+    if(s>1)return;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){i+=dx<0?1:-1;show()}else if(dy>80&&Math.abs(dx)<40)close()},{passive:false});
+  img.addEventListener('dblclick',e=>{e.stopPropagation();if(s>1)reset();else zoomAt(2.5,e.clientX,e.clientY)});
+  box.addEventListener('wheel',e=>{e.preventDefault();zoomAt(s*(e.deltaY<0?1.2:1/1.2),e.clientX,e.clientY)},{passive:false});
+  let drag=null;img.addEventListener('mousedown',e=>{if(s<=1)return;e.preventDefault();drag={x:e.clientX,y:e.clientY}});
+  box.addEventListener('mousemove',e=>{if(!drag)return;tx+=e.clientX-drag.x;ty+=e.clientY-drag.y;drag={x:e.clientX,y:e.clientY};apply()});
+  box.addEventListener('mouseup',()=>{drag=null});
+  img.addEventListener('click',e=>e.stopPropagation());
   document.addEventListener('keydown',onKey);show();
 }
 function careTypeSelect(cur){const list=(typeof itemTypes!=='undefined'?itemTypes:[]);cur=String(cur||'');const known=list.includes(cur);const custom=!!cur&&!known;
