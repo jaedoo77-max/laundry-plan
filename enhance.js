@@ -11,16 +11,16 @@ function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'br
 const ENH_FLOOR = 0.78; // 세탁플랜 벽지: 벽과 바닥이 만나는 높이(비율)
 // 세탁플랜 벽지: 밝은 스튜디오 벽 + 사선 '세탁플랜' 글자 무늬 + 바닥 + 가운데 조명
 function enhPaintBrand(g, W, H) {
-  const N = Math.max(W, H);
+  const N = Math.max(W, H), fy = H * ENH_FLOOR, band = N * 0.025;
   g.fillStyle = '#f4f3f0'; g.fillRect(0, 0, W, H);
+  const fl = g.createLinearGradient(0, fy - band, 0, fy); fl.addColorStop(0, 'rgba(229,226,220,0)'); fl.addColorStop(1, 'rgba(229,226,220,1)');
+  g.fillStyle = fl; g.fillRect(0, fy - band, W, band); g.fillStyle = '#e5e2dc'; g.fillRect(0, fy, W, H - fy);
+  // 사선 '세탁플랜' 글자 무늬: 벽과 바닥 전체에
   g.save(); g.translate(W / 2, H / 2); g.rotate(-25 * Math.PI / 180);
-  g.fillStyle = '#d6cdbb'; g.font = `700 ${Math.round(N / 40)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
+  g.fillStyle = 'rgba(176,160,128,.32)'; g.font = `700 ${Math.round(N / 40)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
   const sx = N * 0.1625, sy = N * 0.075;
   for (let j = 0, y = -N; y < N; y += sy, j++) for (let x = -N + (j % 2) * sx / 2; x < N; x += sx) g.fillText('세탁플랜', x, y);
   g.restore();
-  const fy = H * ENH_FLOOR, band = N * 0.025;
-  const fl = g.createLinearGradient(0, fy - band, 0, fy); fl.addColorStop(0, 'rgba(229,226,220,0)'); fl.addColorStop(1, 'rgba(229,226,220,1)');
-  g.fillStyle = fl; g.fillRect(0, fy - band, W, band); g.fillStyle = '#e5e2dc'; g.fillRect(0, fy, W, H - fy);
   const hi = g.createRadialGradient(W / 2, H * 0.35, 0, W / 2, H * 0.35, N * 0.75);
   hi.addColorStop(0, 'rgba(255,255,255,.38)'); hi.addColorStop(0.55, 'rgba(255,255,255,.08)'); hi.addColorStop(1, 'rgba(0,0,0,.12)');
   g.fillStyle = hi; g.fillRect(0, 0, W, H);
@@ -48,8 +48,8 @@ function enhTone(img, alpha) {
   const lut = new Uint8ClampedArray(256);
   for (let v = 0; v < 256; v++) {
     const s = Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
-    let t = v / 255 * 0.6 + s * 0.4;                 // 구간 펴기는 40%만
-    if (light) t = Math.pow(t, 0.9);                  // 밝은 옷: 그늘진 부분을 살짝 밝혀 얼룩져 보이지 않게
+    let t = light ? v / 255 * 0.4 + s * 0.6 : v / 255 * 0.6 + s * 0.4; // 구간 펴기 (밝은 옷은 60%)
+    if (light) t = Math.pow(t, 0.82);                  // 밝은 옷: 그늘진 부분을 살짝 밝혀 얼룩져 보이지 않게
     else t = t + (dark ? 0.10 : 0.05) * Math.sin((t - 0.5) * Math.PI) * (1 - Math.abs(t - 0.5) * 2); // 어두운 옷: 은은한 대비
     lut[v] = Math.round(Math.min(1, Math.max(0, t)) * 255);
   }
