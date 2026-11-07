@@ -39,6 +39,22 @@ Deno.serve(async (req) => {
     if (image.length < 100) return json({ error: "사진이 없습니다" }, 400);
     if (image.length > 8_000_000) return json({ error: "사진이 너무 큽니다 (긴 변 1600px 정도로 줄여 주세요)" }, 413);
 
+    // 스튜디오 모드: PHOTOROOM_STUDIO_KEY 가 있으면 AI 조명(색 유지) + 자연 그림자 + 가운데 정렬까지 (장당 $0.10)
+    const studioKey = Deno.env.get("PHOTOROOM_STUDIO_KEY");
+    if (studioKey && body.mode !== "basic") {
+      const f2 = new FormData();
+      f2.append("imageFile", new Blob([b64ToBytes(image)], { type: "image/jpeg" }), "photo.jpg");
+      f2.append("lighting.mode", "ai.preserve-hue-and-saturation");
+      f2.append("shadow.mode", "ai.soft");
+      f2.append("padding", "0.08");
+      f2.append("outputSize", "1600x1600");
+      const r2 = await fetch("https://image-api.photoroom.com/v2/edit", { method: "POST", headers: { "x-api-key": studioKey }, body: f2 });
+      if (r2.ok) {
+        const out = new Uint8Array(await r2.arrayBuffer());
+        return json({ png: bytesToB64(out), studio: true, type: r2.headers.get("content-type") || "image/png" });
+      }
+      console.log("studio failed", r2.status, (await r2.text()).slice(0, 300));
+    }
     const form = new FormData();
     form.append("image_file", new Blob([b64ToBytes(image)], { type: "image/jpeg" }), "photo.jpg");
     const res = await fetch("https://sdk.photoroom.com/v1/segment", { method: "POST", headers: { "x-api-key": key }, body: form });
