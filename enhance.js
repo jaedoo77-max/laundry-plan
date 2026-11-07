@@ -118,12 +118,14 @@ async function enhCompose(cut, bg) {
     out = enhCanvas(W, H); const g = out.getContext('2d'); enhPaintBg(g, W, H, bg);
     g.save(); g.shadowColor = 'rgba(40,34,28,.18)'; g.shadowBlur = Math.max(W, H) * 0.025; g.shadowOffsetY = Math.max(W, H) * 0.01; g.drawImage(obj, 0, 0); g.restore();
   } else {
-    const O = ENH.out; out = enhCanvas(O, O); const g = out.getContext('2d'); enhPaintBg(g, O, O, bg);
-    const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(O * 0.8 / bw, O * 0.8 / bh, 3), dw = bw * k, dh = bh * k;
-    g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = O * 0.035; g.shadowOffsetY = O * 0.018; g.imageSmoothingQuality = 'high';
+    // 원본 사진과 같은 비율의 틀에, 물건이 화면을 꽉 채우게(가장자리 여백 4%)
+    const r = ENH.out / Math.max(W, H), CW = Math.round(W * r), CH = Math.round(H * r), N = Math.max(CW, CH), m = N * 0.04;
+    out = enhCanvas(CW, CH); const g = out.getContext('2d'); enhPaintBg(g, CW, CH, bg);
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min((CW - 2 * m) / bw, (CH - 2 * m) / bh, 3), dw = bw * k, dh = bh * k;
+    g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = N * 0.035; g.shadowOffsetY = N * 0.018; g.imageSmoothingQuality = 'high';
     // 세탁플랜 벽지는 물건 밑단이 바닥선에 살짝 닿게(서 있는 느낌), 나머지는 가운데
-    const dy = bg === 'brand' ? Math.min(O - dh - O * 0.04, Math.max(O * 0.04, O * (ENH_FLOOR + 0.06) - dh)) : (O - dh) / 2;
-    g.drawImage(obj, x0, y0, bw, bh, (O - dw) / 2, dy, dw, dh); g.restore();
+    const dy = bg === 'brand' ? Math.min(CH - dh - m, Math.max(m, CH * (ENH_FLOOR + 0.06) - dh)) : (CH - dh) / 2;
+    g.drawImage(obj, x0, y0, bw, bh, (CW - dw) / 2, dy, dw, dh); g.restore();
   }
   return { blob: await enhBlob(out), cutout: true };
 }
