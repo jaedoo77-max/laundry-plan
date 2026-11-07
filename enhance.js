@@ -42,17 +42,22 @@ function enhTone(img, alpha) {
   let lo = 0, hi = 255, acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= cnt * 0.005) { lo = v; break; } }
   acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= cnt * 0.005) { hi = v; break; } }
   if (hi - lo < 40) { lo = 0; hi = 255; }
+  let sum = 0; for (let v = 0; v < 256; v++) sum += v * hist[v];
+  const meanL = sum / cnt; // 밝은 옷(흰·아이보리) / 어두운 옷(검정·퍼)에 따라 다르게
+  const light = meanL > 140, dark = meanL < 100;
   const lut = new Uint8ClampedArray(256);
   for (let v = 0; v < 256; v++) {
     const s = Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
     let t = v / 255 * 0.6 + s * 0.4;                 // 구간 펴기는 40%만
-    t = t + 0.10 * Math.sin((t - 0.5) * Math.PI) * (1 - Math.abs(t - 0.5) * 2) ; // 은은한 S자 대비
+    if (light) t = Math.pow(t, 0.9);                  // 밝은 옷: 그늘진 부분을 살짝 밝혀 얼룩져 보이지 않게
+    else t = t + (dark ? 0.10 : 0.05) * Math.sin((t - 0.5) * Math.PI) * (1 - Math.abs(t - 0.5) * 2); // 어두운 옷: 은은한 대비
     lut[v] = Math.round(Math.min(1, Math.max(0, t)) * 255);
   }
+  const k = light ? 1.0 : 1.05; // 밝은 옷은 채도를 올리지 않음(누렇게 보이는 것 방지)
   for (let i = 0; i < n; i++) {
     if (alpha && alpha[i * 4 + 3] < 8) continue;
-    let r = lut[d[i * 4]], g = lut[d[i * 4 + 1]], b = lut[d[i * 4 + 2]];
-    const l = r * 0.299 + g * 0.587 + b * 0.114, k = 1.06; // 채도 6% 살짝 올림
+    const r = lut[d[i * 4]], g = lut[d[i * 4 + 1]], b = lut[d[i * 4 + 2]];
+    const l = r * 0.299 + g * 0.587 + b * 0.114;
     d[i * 4] = l + (r - l) * k; d[i * 4 + 1] = l + (g - l) * k; d[i * 4 + 2] = l + (b - l) * k;
   }
 }
