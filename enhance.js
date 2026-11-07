@@ -109,6 +109,24 @@ async function enhSession() {
   })().catch(e => { ENH.loading = null; throw e; });
   return ENH.loading;
 }
+// 무료 방식 뒷정리: 흐릿하게 남은 배경(유령 자국) 지우고, 옷과 떨어져 있는 작은 물건(받침대 등)은 버림
+// (가방끈처럼 가는 부분이 잘리지 않게 물건을 깎지는 않음)
+function enhCleanMask(m, R) {
+  const N = R * R, a = new Float32Array(N), b = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const v = Math.min(1, Math.max(0, (m[i] - 0.3) / 0.4)); a[i] = v; b[i] = v > 0.5 ? 1 : 0; }
+  const e = b;
+  const lab = new Int32Array(N), sizes = [0], st = new Int32Array(N);
+  for (let i = 0; i < N; i++) if (e[i] && !lab[i]) { const id = sizes.length; let n = 0, top = 0; st[top++] = i; lab[i] = id;
+    while (top) { const j = st[--top]; n++; const x = j % R, y = (j / R) | 0;
+      if (x > 0 && e[j - 1] && !lab[j - 1]) { lab[j - 1] = id; st[top++] = j - 1; } if (x < R - 1 && e[j + 1] && !lab[j + 1]) { lab[j + 1] = id; st[top++] = j + 1; }
+      if (y > 0 && e[j - R] && !lab[j - R]) { lab[j - R] = id; st[top++] = j - R; } if (y < R - 1 && e[j + R] && !lab[j + R]) { lab[j + R] = id; st[top++] = j + R; } }
+    sizes.push(n); }
+  if (sizes.length < 2) return a;
+  const big = Math.max(...sizes), keep = new Uint8Array(N);
+  for (let i = 0; i < N; i++) if (lab[i] && sizes[lab[i]] >= big * 0.25) keep[i] = 1;
+  for (let i = 0; i < N; i++) if (!keep[i] && a[i] > 0) { const x = i % R, y = (i / R) | 0; let near = 0; for (let d = -2; d <= 2 && !near; d++) { const xx = x + d, yy = y + d; if (xx >= 0 && xx < R && keep[y * R + xx]) near = 1; if (yy >= 0 && yy < R && keep[yy * R + x]) near = 1; } if (!near) a[i] = 0; }
+  return a;
+}
 // 무료 배경 정리: 물건 부분의 투명도(알파) 계산 — 사진은 밖으로 나가지 않음
 async function enhLocalAlpha(src, W, H) {
   const ses = await enhSession(), R = ENH_LOCAL.res;
@@ -117,7 +135,8 @@ async function enhLocalAlpha(src, W, H) {
   for (let i = 0; i < R * R; i++) for (let c = 0; c < 3; c++) f[c * R * R + i] = (px[i * 4 + c] - 128) / 256;
   const out = await ses.run({ [ses.inputNames[0]]: new ort.Tensor('float32', f, [1, 3, R, R]) });
   const m = out[ses.outputNames[0]].data, mc = enhCanvas(R, R), mx = mc.getContext('2d'), md = mx.createImageData(R, R);
-  for (let i = 0; i < R * R; i++) { md.data[i * 4 + 3] = Math.round(Math.min(1, Math.max(0, m[i])) * 255); }
+  const a = window.ENH_NO_CLEAN ? Float32Array.from(m, v => Math.min(1, Math.max(0, v))) : enhCleanMask(m, R);
+  for (let i = 0; i < R * R; i++) md.data[i * 4 + 3] = Math.round(a[i] * 255);
   mx.putImageData(md, 0, 0);
   const big = enhCanvas(W, H), bx = big.getContext('2d', { willReadFrequently: true }); bx.imageSmoothingQuality = 'high'; bx.drawImage(mc, 0, 0, W, H);
   return bx.getImageData(0, 0, W, H).data;
