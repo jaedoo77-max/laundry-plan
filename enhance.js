@@ -82,6 +82,11 @@ async function enhCut(file) {
     const { data, error } = await sb.functions.invoke('cutout-photo', { body: { image: await enhB64(await enhBlob(src, 'image/jpeg', 0.92)) } });
     if (error) throw new Error((await error.context?.json?.().catch(() => null))?.error || error.message || '배경 정리 실패');
     if (!data?.png) throw new Error(data?.error || '배경 정리 실패');
+    if (data.studio) { // 스튜디오 모드: 조명·그림자·구도까지 맞춰진 정사각형(투명 배경)
+      const st = await createImageBitmap(enhUnB64(data.png, data.type || 'image/png'));
+      const sc2 = enhCanvas(st.width, st.height); sc2.getContext('2d').drawImage(st, 0, 0); st.close?.();
+      return { W, H, img, alpha: null, note: '', studio: sc2 };
+    }
     const cut = await createImageBitmap(enhUnB64(data.png, 'image/png'));
     const mc = enhCanvas(W, H), mx = mc.getContext('2d', { willReadFrequently: true }); mx.drawImage(cut, 0, 0, W, H); cut.close?.();
     alpha = mx.getImageData(0, 0, W, H).data;
@@ -90,6 +95,7 @@ async function enhCut(file) {
 }
 // 고른 배경으로 보정본 만들기 (서비스 호출 없음)
 async function enhCompose(cut, bg) {
+  if (cut.studio) { const S = cut.studio, out = enhCanvas(S.width, S.height), g = out.getContext('2d'); enhPaintBg(g, S.width, S.height, bg); g.drawImage(S, 0, 0); return { blob: await enhBlob(out), cutout: true }; }
   const { W, H, alpha } = cut, img = new ImageData(new Uint8ClampedArray(cut.img.data), W, H);
   let cnt = 0, x0 = W, y0 = H, x1 = 0, y1 = 0;
   if (alpha) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (alpha[(y * W + x) * 4 + 3] > 128) { cnt++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
