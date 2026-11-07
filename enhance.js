@@ -30,26 +30,30 @@ const enhBlob = (c, type = 'image/jpeg', q = 0.9) => new Promise((ok, no) => c.t
 async function enhB64(blob) { const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); }
 function enhUnB64(b64, type) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type }); }
 
-// 밝기·색 보정: 물건 부분만 보고 1~99% 구간을 살짝 펴고, 색 틀어짐을 절반만 바로잡고, 아주 조금 밝게.
+// 밝기·색 보정: 물건 부분만 보고 대비를 살짝 살림. 색(화이트밸런스)은 건드리지 않아 원래 색감이 유지됨.
+// 어두운 물건을 억지로 밝히지 않아 '바랜' 느낌이 나지 않게 함.
 function enhTone(img, alpha) {
-  const d = img.data, n = d.length / 4, hist = new Uint32Array(256); let sr = 0, sg = 0, sb = 0, cnt = 0;
+  const d = img.data, n = d.length / 4, hist = new Uint32Array(256); let cnt = 0;
   for (let i = 0; i < n; i++) {
     if (alpha && alpha[i * 4 + 3] < 128) continue;
-    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2]; hist[(r * 77 + g * 150 + b * 29) >> 8]++; sr += r; sg += g; sb += b; cnt++;
+    hist[(d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8]++; cnt++;
   }
   if (cnt < 100) return;
-  let lo = 0, hi = 255, acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= cnt * 0.01) { lo = v; break; } }
-  acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= cnt * 0.01) { hi = v; break; } }
+  let lo = 0, hi = 255, acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= cnt * 0.005) { lo = v; break; } }
+  acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= cnt * 0.005) { hi = v; break; } }
   if (hi - lo < 40) { lo = 0; hi = 255; }
-  const mr = sr / cnt, mg = sg / cnt, mb = sb / cnt, gray = (mr + mg + mb) / 3;
-  const gain = m => 1 + (Math.min(1.12, Math.max(0.9, gray / (m || 1))) - 1) * 0.5;
-  const gr = gain(mr), gg = gain(mg), gb = gain(mb);
   const lut = new Uint8ClampedArray(256);
-  for (let v = 0; v < 256; v++) { const s = Math.min(1, Math.max(0, (v - lo) / (hi - lo))); const st = v / 255 * 0.4 + s * 0.6; lut[v] = Math.round(Math.pow(st, 0.93) * 255); }
+  for (let v = 0; v < 256; v++) {
+    const s = Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
+    let t = v / 255 * 0.6 + s * 0.4;                 // 구간 펴기는 40%만
+    t = t + 0.10 * Math.sin((t - 0.5) * Math.PI) * (1 - Math.abs(t - 0.5) * 2) ; // 은은한 S자 대비
+    lut[v] = Math.round(Math.min(1, Math.max(0, t)) * 255);
+  }
   for (let i = 0; i < n; i++) {
-    d[i * 4] = lut[Math.min(255, Math.round(d[i * 4] * gr))];
-    d[i * 4 + 1] = lut[Math.min(255, Math.round(d[i * 4 + 1] * gg))];
-    d[i * 4 + 2] = lut[Math.min(255, Math.round(d[i * 4 + 2] * gb))];
+    if (alpha && alpha[i * 4 + 3] < 8) continue;
+    let r = lut[d[i * 4]], g = lut[d[i * 4 + 1]], b = lut[d[i * 4 + 2]];
+    const l = r * 0.299 + g * 0.587 + b * 0.114, k = 1.06; // 채도 6% 살짝 올림
+    d[i * 4] = l + (r - l) * k; d[i * 4 + 1] = l + (g - l) * k; d[i * 4 + 2] = l + (b - l) * k;
   }
 }
 function enhPaintBg(g, W, H, bg) {
@@ -92,7 +96,8 @@ async function enhCompose(cut, bg) {
   const ok = !!alpha && cnt / (W * H) > 0.02 && x1 > x0 && y1 > y0;
   enhTone(img, ok ? alpha : null);
   if (!ok) { const c = enhCanvas(W, H); c.getContext('2d').putImageData(img, 0, 0); return { blob: await enhBlob(c), cutout: false }; }
-  for (let i = 0; i < W * H; i++) img.data[i * 4 + 3] = alpha[i * 4 + 3];
+  // 털·니트처럼 반투명하게 잡힌 부분은 단단하게(속은 불투명, 끝만 부드럽게) — 밝은 배경이 비쳐 '바래' 보이는 것 방지
+  for (let i = 0; i < W * H; i++) { const v = alpha[i * 4 + 3]; img.data[i * 4 + 3] = v <= 16 ? 0 : v >= 150 ? 255 : Math.round((v - 16) / 134 * 255); }
   const obj = enhCanvas(W, H); obj.getContext('2d').putImageData(img, 0, 0);
   // 물건이 사진 가장자리에 걸려 있으면(가까이서 찍은 사진) 구도는 그대로 두고 배경만 바꿈. 아니면 정사각형 가운데 정렬.
   const edge = (len, at) => { let k = 0; for (let j = 0; j < len; j++) if (alpha[at(j) * 4 + 3] > 128) k++; return k / len; };
