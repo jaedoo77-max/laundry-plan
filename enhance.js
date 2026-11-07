@@ -3,11 +3,28 @@
 // 2) 고른 배경(흰색 / 연회색 / 체크 무늬) 위에 물건 + 은은한 그림자 + 밝기·색 살짝 보정
 // 물건 자체는 다시 그리지 않습니다. 원본은 따로 저장되고, 고객 화면에는 보정본이 올라갑니다.
 const ENH = { out: 1600, queue: Promise.resolve() };
-const ENH_BGS = { white: '흰색', gray: '연회색', check: '체크 무늬' };
+const ENH_BGS = { brand: '세탁플랜 벽지', white: '흰색', gray: '연회색', check: '체크 무늬' };
 function enhEnabled() { try { return localStorage.getItem('enh-off') !== '1'; } catch { return true; } }
 function enhSetEnabled(on) { try { on ? localStorage.removeItem('enh-off') : localStorage.setItem('enh-off', '1'); } catch {} }
-function enhBg() { try { const v = localStorage.getItem('enh-bg'); return ENH_BGS[v] ? v : 'white'; } catch { return 'white'; } }
-function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'white'); } catch {} }
+function enhBg() { try { const v = localStorage.getItem('enh-bg'); return ENH_BGS[v] ? v : 'brand'; } catch { return 'brand'; } }
+function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'brand'); } catch {} }
+const ENH_FLOOR = 0.78; // 세탁플랜 벽지: 벽과 바닥이 만나는 높이(비율)
+// 세탁플랜 벽지: 밝은 스튜디오 벽 + 사선 '세탁플랜' 글자 무늬 + 바닥 + 가운데 조명
+function enhPaintBrand(g, W, H) {
+  const N = Math.max(W, H);
+  g.fillStyle = '#f4f3f0'; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(W / 2, H / 2); g.rotate(-25 * Math.PI / 180);
+  g.fillStyle = '#e9e6e0'; g.font = `600 ${Math.round(N / 47)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
+  const sx = N * 0.1625, sy = N * 0.075;
+  for (let j = 0, y = -N; y < N; y += sy, j++) for (let x = -N + (j % 2) * sx / 2; x < N; x += sx) g.fillText('세탁플랜', x, y);
+  g.restore();
+  const fy = H * ENH_FLOOR, band = N * 0.025;
+  const fl = g.createLinearGradient(0, fy - band, 0, fy); fl.addColorStop(0, 'rgba(229,226,220,0)'); fl.addColorStop(1, 'rgba(229,226,220,1)');
+  g.fillStyle = fl; g.fillRect(0, fy - band, W, band); g.fillStyle = '#e5e2dc'; g.fillRect(0, fy, W, H - fy);
+  const hi = g.createRadialGradient(W / 2, H * 0.35, 0, W / 2, H * 0.35, N * 0.75);
+  hi.addColorStop(0, 'rgba(255,255,255,.38)'); hi.addColorStop(0.55, 'rgba(255,255,255,.08)'); hi.addColorStop(1, 'rgba(0,0,0,.12)');
+  g.fillStyle = hi; g.fillRect(0, 0, W, H);
+}
 function enhCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const enhBlob = (c, type = 'image/jpeg', q = 0.9) => new Promise((ok, no) => c.toBlob(b => (b ? ok(b) : no(new Error('사진을 만들지 못했습니다'))), type, q));
 async function enhB64(blob) { const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); }
@@ -36,6 +53,7 @@ function enhTone(img, alpha) {
   }
 }
 function enhPaintBg(g, W, H, bg) {
+  if (bg === 'brand') return enhPaintBrand(g, W, H);
   if (bg === 'check') {
     g.fillStyle = '#fbfbfa'; g.fillRect(0, 0, W, H);
     const s = Math.round(Math.max(W, H) / 22); g.fillStyle = '#efeeeb';
@@ -87,7 +105,9 @@ async function enhCompose(cut, bg) {
     const O = ENH.out; out = enhCanvas(O, O); const g = out.getContext('2d'); enhPaintBg(g, O, O, bg);
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(O * 0.8 / bw, O * 0.8 / bh, 3), dw = bw * k, dh = bh * k;
     g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = O * 0.035; g.shadowOffsetY = O * 0.018; g.imageSmoothingQuality = 'high';
-    g.drawImage(obj, x0, y0, bw, bh, (O - dw) / 2, (O - dh) / 2, dw, dh); g.restore();
+    // 세탁플랜 벽지는 물건 밑단이 바닥선에 살짝 닿게(서 있는 느낌), 나머지는 가운데
+    const dy = bg === 'brand' ? Math.min(O - dh - O * 0.04, Math.max(O * 0.04, O * (ENH_FLOOR + 0.06) - dh)) : (O - dh) / 2;
+    g.drawImage(obj, x0, y0, bw, bh, (O - dw) / 2, dy, dw, dh); g.restore();
   }
   return { blob: await enhBlob(out), cutout: true };
 }
