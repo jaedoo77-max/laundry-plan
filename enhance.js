@@ -1,8 +1,22 @@
 // 사진 자동 보정
-// 1) 배경 정리: 상품사진 전문 서비스(Photoroom)로 물건만 따냄 — 서버 함수 cutout-photo 경유 (키는 서버에만 있음)
+// 1) 배경 정리: 기본은 휴대폰 안에서 무료로 처리(ISNet 모델). Photoroom 유료를 쓰려면 ENH_ENGINE 을 'photoroom' 으로
+//    (Photoroom은 서버 함수 cutout-photo 경유, 키는 서버에만 있음. 실패하면 무료 방식으로 자동 전환)
 // 2) 고른 배경(흰색 / 연회색 / 체크 무늬) 위에 물건 + 은은한 그림자 + 밝기·색 살짝 보정
 // 물건 자체는 다시 그리지 않습니다. 원본은 따로 저장되고, 고객 화면에는 보정본이 올라갑니다.
-const ENH = { out: 1600, queue: Promise.resolve() };
+const ENH = { out: 1600, queue: Promise.resolve(), ses: null, loading: null };
+const ENH_ENGINE = window.ENH_ENGINE || 'local'; // 'local'(무료, 휴대폰에서 처리) | 'photoroom'(유료)
+// 무료 배경 정리 모델: ISNet(일반 물체용) 경량판 44MB — 처음 한 번만 받고 휴대폰에 보관
+const ENH_LOCAL = {
+  ort: window.ENH_ORT_BASE || 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/',
+  base: window.ENH_MODEL_BASE || 'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
+  size: 44342436, res: 1024,
+  chunks: ['b34a3e9350ad77140964b6a2e1e32cd9738acd9d01e5899b96be71901a22ef47', '8a85c22e472bed10198298a3d57480a5a90946dba88bddecf8b0bf0eafc06e70',
+    '5faec25d2338ae8ca2c7bff72e954cebd40a04c5f34c4b6bb8ca6720fae40996', 'b9861d932a549be455fc8ebd8ce5d413049515bfdd3edd55e136dbe05dd34ef5',
+    'f070b4c4f512cfe8dd6936c3cb9a616f132894867d3d33304d83599eb6b55636', '10d02652d10fbc47bf93732ff9e8ad53eefbd3bd89ab3c1fbc15ddd740bea672',
+    '014c9e0229363137e92b85ed3c6f56b1386c279cdd9af2d7f1960ed8428b5e94', '34dd3ad760f7e31b5e9144b8c387b8ecd6dc43116248c93c56dd7051ab525e3b',
+    'e7ca5cc3e0afd65581642a05ac91eb8ea4d0deb868df94b8981c910212526476', '0ad4ebb86cfdd847901427181b7a7804dba93d868c3cd5f11a294acf36c9413f',
+    '9582c0375aed822c5577a814766c4afc6c096f4ccd3b0d08af6a1794987206a1'],
+};
 const ENH_BGS = { brand: '세탁플랜 벽지', white: '흰색', gray: '연회색', check: '체크 무늬' };
 function enhEnabled() { try { return localStorage.getItem('enh-off') !== '1'; } catch { return true; } }
 function enhSetEnabled(on) { try { on ? localStorage.removeItem('enh-off') : localStorage.setItem('enh-off', '1'); } catch {} }
@@ -75,6 +89,48 @@ function enhPaintBg(g, W, H, bg) {
   const gr = g.createRadialGradient(W / 2, H * 0.42, Math.min(W, H) * 0.05, W / 2, H / 2, Math.max(W, H) * 0.75);
   gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, W, H);
 }
+function enhLoadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('보정 프로그램을 불러오지 못했습니다 (인터넷 확인)')); document.head.appendChild(s); }); }
+async function enhModelBytes() {
+  const key = 'isnet-quint8-' + ENH_LOCAL.size;
+  let cache = null; try { cache = await caches.open('enh-model-v1'); const hit = await cache.match(key); if (hit) { const b = await hit.arrayBuffer(); if (b.byteLength === ENH_LOCAL.size) return new Uint8Array(b); } } catch {}
+  const parts = await Promise.all(ENH_LOCAL.chunks.map(async h => { const r = await fetch(ENH_LOCAL.base + h); if (!r.ok) throw new Error('보정 모델을 받지 못했습니다 (' + r.status + ')'); return new Uint8Array(await r.arrayBuffer()); }));
+  const all = new Uint8Array(ENH_LOCAL.size); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+  if (o !== ENH_LOCAL.size) throw new Error('보정 모델이 손상되었습니다');
+  try { await cache?.put(key, new Response(all, { headers: { 'content-type': 'application/octet-stream' } })); } catch {}
+  return all;
+}
+async function enhSession() {
+  if (ENH.ses) return ENH.ses;
+  if (!ENH.loading) ENH.loading = (async () => {
+    if (!window.ort) await enhLoadScript(ENH_LOCAL.ort + 'ort.min.js');
+    ort.env.wasm.wasmPaths = ENH_LOCAL.ort; ort.env.wasm.numThreads = 1;
+    ENH.ses = await ort.InferenceSession.create(await enhModelBytes(), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    return ENH.ses;
+  })().catch(e => { ENH.loading = null; throw e; });
+  return ENH.loading;
+}
+// 무료 배경 정리: 물건 부분의 투명도(알파) 계산 — 사진은 밖으로 나가지 않음
+async function enhLocalAlpha(src, W, H) {
+  const ses = await enhSession(), R = ENH_LOCAL.res;
+  const t = enhCanvas(R, R), tx = t.getContext('2d', { willReadFrequently: true }); tx.imageSmoothingQuality = 'high'; tx.drawImage(src, 0, 0, R, R);
+  const px = tx.getImageData(0, 0, R, R).data, f = new Float32Array(3 * R * R);
+  for (let i = 0; i < R * R; i++) for (let c = 0; c < 3; c++) f[c * R * R + i] = (px[i * 4 + c] - 128) / 256;
+  const out = await ses.run({ [ses.inputNames[0]]: new ort.Tensor('float32', f, [1, 3, R, R]) });
+  const m = out[ses.outputNames[0]].data, mc = enhCanvas(R, R), mx = mc.getContext('2d'), md = mx.createImageData(R, R);
+  for (let i = 0; i < R * R; i++) { md.data[i * 4 + 3] = Math.round(Math.min(1, Math.max(0, m[i])) * 255); }
+  mx.putImageData(md, 0, 0);
+  const big = enhCanvas(W, H), bx = big.getContext('2d', { willReadFrequently: true }); bx.imageSmoothingQuality = 'high'; bx.drawImage(mc, 0, 0, W, H);
+  return bx.getImageData(0, 0, W, H).data;
+}
+async function enhPhotoroom(src, W, H) {
+  if (typeof sb === 'undefined' || !sb) throw new Error('로그인이 필요합니다');
+  const { data, error } = await sb.functions.invoke('cutout-photo', { body: { image: await enhB64(await enhBlob(src, 'image/jpeg', 0.92)) } });
+  if (error) throw new Error((await error.context?.json?.().catch(() => null))?.error || error.message || '배경 정리 실패');
+  if (!data?.png) throw new Error(data?.error || '배경 정리 실패');
+  const cut = await createImageBitmap(enhUnB64(data.png, 'image/png'));
+  const mc = enhCanvas(W, H), mx = mc.getContext('2d', { willReadFrequently: true }); mx.drawImage(cut, 0, 0, W, H); cut.close?.();
+  return mx.getImageData(0, 0, W, H).data;
+}
 // 배경만 따로 정리 (서비스 호출 1회). 결과(물건+투명 배경)를 보관해 두면 배경색을 바꿔도 다시 부르지 않음.
 async function enhCut(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(file));
@@ -82,20 +138,8 @@ async function enhCut(file) {
   const src = enhCanvas(W, H), sx = src.getContext('2d', { willReadFrequently: true }); sx.drawImage(bmp, 0, 0, W, H); bmp.close?.();
   const img = sx.getImageData(0, 0, W, H);
   let alpha = null, note = '';
-  try {
-    if (typeof sb === 'undefined' || !sb) throw new Error('로그인이 필요합니다');
-    const { data, error } = await sb.functions.invoke('cutout-photo', { body: { image: await enhB64(await enhBlob(src, 'image/jpeg', 0.92)) } });
-    if (error) throw new Error((await error.context?.json?.().catch(() => null))?.error || error.message || '배경 정리 실패');
-    if (!data?.png) throw new Error(data?.error || '배경 정리 실패');
-    if (data.studio) { // 스튜디오 모드: 조명·그림자·구도까지 맞춰진 정사각형(투명 배경)
-      const st = await createImageBitmap(enhUnB64(data.png, data.type || 'image/png'));
-      const sc2 = enhCanvas(st.width, st.height); sc2.getContext('2d').drawImage(st, 0, 0); st.close?.();
-      return { W, H, img, alpha: null, note: '', studio: sc2 };
-    }
-    const cut = await createImageBitmap(enhUnB64(data.png, 'image/png'));
-    const mc = enhCanvas(W, H), mx = mc.getContext('2d', { willReadFrequently: true }); mx.drawImage(cut, 0, 0, W, H); cut.close?.();
-    alpha = mx.getImageData(0, 0, W, H).data;
-  } catch (e) { note = e.message || String(e); }
+  if (ENH_ENGINE === 'photoroom') { try { alpha = await enhPhotoroom(src, W, H); } catch (e) { note = e.message || String(e); } }
+  if (!alpha) { try { alpha = await enhLocalAlpha(src, W, H); note = ''; } catch (e) { note = (note ? note + ' / ' : '') + (e.message || String(e)); } }
   return { W, H, img, alpha, note };
 }
 // 고른 배경으로 보정본 만들기 (서비스 호출 없음)
