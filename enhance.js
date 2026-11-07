@@ -1,32 +1,18 @@
-// 사진 자동 보정 (기기 안에서 처리, 무료)
-// 배경 분리(U2Net-p) → 밝은 스튜디오 배경 + 은은한 그림자 + 밝기·색 보정. 물건 모양은 바꾸지 않습니다.
-// 원본은 따로 저장되고, 고객 화면에는 보정본이 올라갑니다.
-const ENH = {
-  ortBase: window.ENH_ORT_BASE || 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/',
-  modelUrl: window.ENH_MODEL_URL || 'https://cdn.jsdelivr.net/npm/@rmbg/model-u2netp@0.0.1/u2netp.onnx',
-  modelSha256: '309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8',
-  size: 320, out: 1600, session: null, loading: null, queue: Promise.resolve(),
-};
+// 사진 자동 보정
+// 1) 배경 정리: 상품사진 전문 서비스(Photoroom)로 물건만 따냄 — 서버 함수 cutout-photo 경유 (키는 서버에만 있음)
+// 2) 고른 배경(흰색 / 연회색 / 체크 무늬) 위에 물건 + 은은한 그림자 + 밝기·색 살짝 보정
+// 물건 자체는 다시 그리지 않습니다. 원본은 따로 저장되고, 고객 화면에는 보정본이 올라갑니다.
+const ENH = { out: 1600, queue: Promise.resolve() };
+const ENH_BGS = { white: '흰색', gray: '연회색', check: '체크 무늬' };
 function enhEnabled() { try { return localStorage.getItem('enh-off') !== '1'; } catch { return true; } }
 function enhSetEnabled(on) { try { on ? localStorage.removeItem('enh-off') : localStorage.setItem('enh-off', '1'); } catch {} }
-function enhLoadScript(src) {
-  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('보정 엔진을 불러오지 못했습니다')); document.head.appendChild(s); });
-}
-async function enhSession() {
-  if (ENH.session) return ENH.session;
-  if (!ENH.loading) ENH.loading = (async () => {
-    if (!window.ort) await enhLoadScript(ENH.ortBase + 'ort.min.js');
-    ort.env.wasm.wasmPaths = ENH.ortBase; ort.env.wasm.numThreads = 1;
-    const r = await fetch(ENH.modelUrl); if (!r.ok) throw new Error('보정 모델을 불러오지 못했습니다');
-    const buf = await r.arrayBuffer();
-    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(x => x.toString(16).padStart(2, '0')).join('');
-    if (hash !== ENH.modelSha256) throw new Error('보정 모델 확인에 실패했습니다');
-    ENH.session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'] });
-    return ENH.session;
-  })().catch(e => { ENH.loading = null; throw e; });
-  return ENH.loading;
-}
+function enhBg() { try { const v = localStorage.getItem('enh-bg'); return ENH_BGS[v] ? v : 'white'; } catch { return 'white'; } }
+function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'white'); } catch {} }
 function enhCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+const enhBlob = (c, type = 'image/jpeg', q = 0.9) => new Promise((ok, no) => c.toBlob(b => (b ? ok(b) : no(new Error('사진을 만들지 못했습니다'))), type, q));
+async function enhB64(blob) { const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); }
+function enhUnB64(b64, type) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type }); }
+
 // 밝기·색 보정: 물건 부분만 보고 1~99% 구간을 살짝 펴고, 색 틀어짐을 절반만 바로잡고, 아주 조금 밝게.
 function enhTone(img, alpha) {
   const d = img.data, n = d.length / 4, hist = new Uint32Array(256); let sr = 0, sg = 0, sb = 0, cnt = 0;
@@ -49,58 +35,74 @@ function enhTone(img, alpha) {
     d[i * 4 + 2] = lut[Math.min(255, Math.round(d[i * 4 + 2] * gb))];
   }
 }
-async function enhRun(file) {
+function enhPaintBg(g, W, H, bg) {
+  if (bg === 'check') {
+    g.fillStyle = '#fbfbfa'; g.fillRect(0, 0, W, H);
+    const s = Math.round(Math.max(W, H) / 22); g.fillStyle = '#efeeeb';
+    for (let y = 0; y < H; y += s) for (let x = ((y / s) % 2) * s; x < W; x += s * 2) g.fillRect(x, y, s, s);
+    const v = g.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.75);
+    v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(1, 'rgba(0,0,0,.05)'); g.fillStyle = v; g.fillRect(0, 0, W, H);
+    return;
+  }
+  const [a, b] = bg === 'gray' ? ['#efeeeb', '#dcdad5'] : ['#ffffff', '#eeece8'];
+  const gr = g.createRadialGradient(W / 2, H * 0.42, Math.min(W, H) * 0.05, W / 2, H / 2, Math.max(W, H) * 0.75);
+  gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+}
+// 배경만 따로 정리 (서비스 호출 1회). 결과(물건+투명 배경)를 보관해 두면 배경색을 바꿔도 다시 부르지 않음.
+async function enhCut(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(file));
   const sc = Math.min(1, ENH.out / Math.max(bmp.width, bmp.height)), W = Math.round(bmp.width * sc), H = Math.round(bmp.height * sc);
   const src = enhCanvas(W, H), sx = src.getContext('2d', { willReadFrequently: true }); sx.drawImage(bmp, 0, 0, W, H); bmp.close?.();
-  // 1) 배경 분리
-  const S = ENH.size, t = enhCanvas(S, S), tx = t.getContext('2d', { willReadFrequently: true }); tx.drawImage(src, 0, 0, S, S);
-  const px = tx.getImageData(0, 0, S, S).data, f = new Float32Array(3 * S * S), mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
-  for (let i = 0; i < S * S; i++) for (let c = 0; c < 3; c++) f[c * S * S + i] = (px[i * 4 + c] / 255 - mean[c]) / std[c];
-  const ses = await enhSession();
-  const res = await ses.run({ [ses.inputNames[0]]: new ort.Tensor('float32', f, [1, 3, S, S]) });
-  const m = res[ses.outputNames[0]].data; let mn = Infinity, mx = -Infinity; for (const v of m) { if (v < mn) mn = v; if (v > mx) mx = v; }
-  const mc = enhCanvas(S, S), mctx = mc.getContext('2d'), md = mctx.createImageData(S, S);
-  for (let i = 0; i < S * S; i++) { let a = (m[i] - mn) / (mx - mn + 1e-8); a = Math.min(1, Math.max(0, (a - 0.12) / 0.76)); md.data[i * 4 + 3] = Math.round(a * 255); }
-  mctx.putImageData(md, 0, 0);
-  const fm = enhCanvas(W, H), fx = fm.getContext('2d', { willReadFrequently: true }); fx.imageSmoothingQuality = 'high'; fx.drawImage(mc, 0, 0, W, H);
-  const ma = fx.getImageData(0, 0, W, H).data;
+  const img = sx.getImageData(0, 0, W, H);
+  let alpha = null, note = '';
+  try {
+    if (typeof sb === 'undefined' || !sb) throw new Error('로그인이 필요합니다');
+    const { data, error } = await sb.functions.invoke('cutout-photo', { body: { image: await enhB64(await enhBlob(src, 'image/jpeg', 0.92)) } });
+    if (error) throw new Error((await error.context?.json?.().catch(() => null))?.error || error.message || '배경 정리 실패');
+    if (!data?.png) throw new Error(data?.error || '배경 정리 실패');
+    const cut = await createImageBitmap(enhUnB64(data.png, 'image/png'));
+    const mc = enhCanvas(W, H), mx = mc.getContext('2d', { willReadFrequently: true }); mx.drawImage(cut, 0, 0, W, H); cut.close?.();
+    alpha = mx.getImageData(0, 0, W, H).data;
+  } catch (e) { note = e.message || String(e); }
+  return { W, H, img, alpha, note };
+}
+// 고른 배경으로 보정본 만들기 (서비스 호출 없음)
+async function enhCompose(cut, bg) {
+  const { W, H, alpha } = cut, img = new ImageData(new Uint8ClampedArray(cut.img.data), W, H);
   let cnt = 0, x0 = W, y0 = H, x1 = 0, y1 = 0;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ma[(y * W + x) * 4 + 3] > 128) { cnt++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  // 물건이 사진 가장자리에 걸려 잘려 있으면(가까이서 찍은 사진) 오려내면 어색하므로 색감만 보정
-  const edge = (len, at) => { let k = 0; for (let j = 0; j < len; j++) if (ma[at(j) * 4 + 3] > 128) k++; return k / len; };
-  const cutEdge = Math.max(edge(W, x => x), edge(W, x => (H - 1) * W + x), edge(H, y => y * W), edge(H, y => y * W + W - 1)) > 0.2;
-  const cov = cnt / (W * H), ok = cov > 0.03 && cov < 0.93 && x1 > x0 && y1 > y0 && !cutEdge;
-  // 2) 밝기·색 보정
-  const img = sx.getImageData(0, 0, W, H); enhTone(img, ok ? ma : null);
+  if (alpha) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (alpha[(y * W + x) * 4 + 3] > 128) { cnt++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const ok = !!alpha && cnt / (W * H) > 0.02 && x1 > x0 && y1 > y0;
+  enhTone(img, ok ? alpha : null);
+  if (!ok) { const c = enhCanvas(W, H); c.getContext('2d').putImageData(img, 0, 0); return { blob: await enhBlob(c), cutout: false }; }
+  for (let i = 0; i < W * H; i++) img.data[i * 4 + 3] = alpha[i * 4 + 3];
+  const obj = enhCanvas(W, H); obj.getContext('2d').putImageData(img, 0, 0);
+  // 물건이 사진 가장자리에 걸려 있으면(가까이서 찍은 사진) 구도는 그대로 두고 배경만 바꿈. 아니면 정사각형 가운데 정렬.
+  const edge = (len, at) => { let k = 0; for (let j = 0; j < len; j++) if (alpha[at(j) * 4 + 3] > 128) k++; return k / len; };
+  const touches = Math.max(edge(W, x => x), edge(W, x => (H - 1) * W + x), edge(H, y => y * W), edge(H, y => y * W + W - 1)) > 0.03;
   let out;
-  if (ok) {
-    for (let i = 0; i < W * H; i++) img.data[i * 4 + 3] = ma[i * 4 + 3];
-    const obj = enhCanvas(W, H); obj.getContext('2d').putImageData(img, 0, 0);
-    // 3) 스튜디오 배경 + 그림자, 물건을 가운데 정렬
-    const O = ENH.out; out = enhCanvas(O, O); const g = out.getContext('2d');
-    const grad = g.createRadialGradient(O / 2, O * 0.42, O * 0.05, O / 2, O / 2, O * 0.75);
-    grad.addColorStop(0, '#ffffff'); grad.addColorStop(1, '#ebe8e3'); g.fillStyle = grad; g.fillRect(0, 0, O, O);
-    const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(O * 0.8 / bw, O * 0.8 / bh, 3), dw = bw * k, dh = bh * k, dx = (O - dw) / 2, dy = (O - dh) / 2;
-    g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = O * 0.035; g.shadowOffsetY = O * 0.018; g.imageSmoothingQuality = 'high';
-    g.drawImage(obj, x0, y0, bw, bh, dx, dy, dw, dh); g.restore();
+  if (touches) {
+    out = enhCanvas(W, H); const g = out.getContext('2d'); enhPaintBg(g, W, H, bg);
+    g.save(); g.shadowColor = 'rgba(40,34,28,.18)'; g.shadowBlur = Math.max(W, H) * 0.025; g.shadowOffsetY = Math.max(W, H) * 0.01; g.drawImage(obj, 0, 0); g.restore();
   } else {
-    // 배경 분리가 어려운 사진(물건이 화면을 꽉 채우거나 너무 작음): 색감만 보정
-    out = enhCanvas(W, H); out.getContext('2d').putImageData(img, 0, 0);
+    const O = ENH.out; out = enhCanvas(O, O); const g = out.getContext('2d'); enhPaintBg(g, O, O, bg);
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min(O * 0.8 / bw, O * 0.8 / bh, 3), dw = bw * k, dh = bh * k;
+    g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = O * 0.035; g.shadowOffsetY = O * 0.018; g.imageSmoothingQuality = 'high';
+    g.drawImage(obj, x0, y0, bw, bh, (O - dw) / 2, (O - dh) / 2, dw, dh); g.restore();
   }
-  const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.9));
-  if (!blob) throw new Error('보정본을 만들지 못했습니다');
-  return { blob, cutout: ok };
+  return { blob: await enhBlob(out), cutout: true };
 }
-// 사진 한 장 보정 (여러 장이면 순서대로 하나씩 처리해서 휴대폰 메모리 부담을 줄임)
-function enhancePhoto(file) {
-  const job = ENH.queue.then(() => enhRun(file));
+function enhWrap(file, r) {
+  const base = String(file.name || 'photo').replace(/\.[^.]+$/, '');
+  return { file: new File([r.blob], base + '-enh.jpg', { type: 'image/jpeg' }), url: URL.createObjectURL(r.blob), cutout: r.cutout };
+}
+// 사진 한 장 보정 (여러 장이면 순서대로 하나씩 처리)
+function enhancePhoto(file, bg = enhBg()) {
+  const job = ENH.queue.then(async () => { const cut = await enhCut(file); const r = await enhCompose(cut, bg); return { ...enhWrap(file, r), cut, note: cut.note }; });
   ENH.queue = job.catch(() => {});
-  return job.then(r => {
-    const base = String(file.name || 'photo').replace(/\.[^.]+$/, '');
-    return { file: new File([r.blob], base + '-enh.jpg', { type: 'image/jpeg' }), url: URL.createObjectURL(r.blob), cutout: r.cutout };
-  });
+  return job;
 }
+// 배경만 바꿔 다시 만들기 (추가 비용 없음)
+async function enhRecompose(file, cut, bg) { return enhWrap(file, await enhCompose(cut, bg)); }
 // 저장 직전: 보정이 끝나길 기다린 뒤, 올릴 사진(보정본 또는 원본)과 따로 보관할 원본을 나눔
 async function carePrepare(pending) {
   await Promise.allSettled(pending.map(f => f._enhP).filter(Boolean));
