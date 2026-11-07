@@ -18,6 +18,8 @@ header{background:#0A0A0A;border-bottom:1px solid #292925;height:76px}header a{c
 .lightbox figcaption{color:#e5c668;font-size:15px;letter-spacing:.08em;margin-top:12px}
 .lightbox button{position:absolute;margin:0;min-height:0;background:rgba(20,20,19,.7);color:#eee;border:1px solid #3a3930;border-radius:50%;width:44px;height:44px;font-size:28px;line-height:1;padding:0;display:grid;place-items:center}
 .lb-close{top:calc(14px + env(safe-area-inset-top,0));right:14px}
+.lightbox .lb-save{top:calc(14px + env(safe-area-inset-top,0));left:14px;width:auto;padding:0 16px;border-radius:22px;font-size:15px;font-weight:600;color:#fff;background:rgba(20,20,19,.8)}
+.lightbox.zoomed .lb-save{visibility:visible}
 .lb-prev{left:10px;top:50%;transform:translateY(-50%)}.lb-next{right:10px;top:50%;transform:translateY(-50%)}
 .lb-count{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom,0));left:0;right:0;text-align:center;color:#a8a69d;font-size:13px;letter-spacing:.1em}
 body.lb-open{overflow:hidden}

@@ -20,7 +20,7 @@ function careBindLightbox(root){
 }
 function careLightbox(urls,start=0,caps=[]){
   let i=start;const old=document.querySelector('.lightbox');if(old)old.remove();
-  const box=document.createElement('div');box.className='lightbox';box.innerHTML='<button class="lb-close" aria-label="닫기">×</button><button class="lb-prev" aria-label="이전">‹</button><figure><img alt=""><figcaption></figcaption></figure><button class="lb-next" aria-label="다음">›</button><div class="lb-count"></div>';
+  const box=document.createElement('div');box.className='lightbox';box.innerHTML='<button class="lb-close" aria-label="닫기">×</button><button class="lb-save" aria-label="사진 저장">저장</button><button class="lb-prev" aria-label="이전">‹</button><figure><img alt=""><figcaption></figcaption></figure><button class="lb-next" aria-label="다음">›</button><div class="lb-count"></div>';
   document.body.appendChild(box);document.body.classList.add('lb-open');
   const img=box.querySelector('img'),cap=box.querySelector('figcaption'),cnt=box.querySelector('.lb-count');
   let show=()=>{i=(i+urls.length)%urls.length;img.src=urls[i];cap.textContent=caps[i]||'';cap.hidden=!caps[i];cnt.textContent=`${i+1} / ${urls.length}`;box.querySelector('.lb-prev').hidden=box.querySelector('.lb-next').hidden=urls.length<2;};
@@ -28,6 +28,14 @@ function careLightbox(urls,start=0,caps=[]){
   const onKey=e=>{if(e.key==='Escape')close();else if(e.key==='ArrowLeft'){i--;show()}else if(e.key==='ArrowRight'){i++;show()}};
   box.querySelector('.lb-close').onclick=close;box.querySelector('.lb-prev').onclick=e=>{e.stopPropagation();i--;show()};box.querySelector('.lb-next').onclick=e=>{e.stopPropagation();i++;show()};
   box.onclick=e=>{if(e.target===box||e.target.tagName==='FIGURE')close()};
+  // 사진 저장: 휴대폰은 공유창(→ '이미지 저장'), PC는 바로 다운로드
+  box.querySelector('.lb-save').onclick=async e=>{e.stopPropagation();const b=e.currentTarget;if(b.disabled)return;b.disabled=true;b.textContent='…';
+    try{const r=await fetch(urls[i]);if(!r.ok)throw new Error('사진을 불러오지 못했습니다');const blob=await r.blob();const ext=(blob.type.split('/')[1]||'jpg').replace('jpeg','jpg');
+      const name=`setakplan_${new Date().toISOString().slice(0,10)}_${i+1}.${ext}`,file=new File([blob],name,{type:blob.type||'image/jpeg'});
+      if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file]})}catch(x){if(x.name!=='AbortError')throw x}}
+      else{const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),1000);setTimeout(()=>URL.revokeObjectURL(u),4000)}
+    }catch(x){alert('저장하지 못했습니다. 사진을 길게 눌러 저장해 주세요.')}finally{b.disabled=false;b.textContent='저장'}};
+
   // 확대: 두 손가락 벌리기 / 두 번 탭 / PC는 휠·더블클릭. 확대 중엔 한 손가락으로 이동, 넘기기·닫기는 원래 크기일 때만.
   let s=1,tx=0,ty=0;const clampT=()=>{if(s<=1){s=1;tx=0;ty=0;return}const mx=img.offsetWidth*(s-1)/2,my=img.offsetHeight*(s-1)/2;tx=Math.max(-mx,Math.min(mx,tx));ty=Math.max(-my,Math.min(my,ty))};
   const apply=()=>{clampT();img.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;box.classList.toggle('zoomed',s>1)};
