@@ -14,7 +14,7 @@ function enhPaintBrand(g, W, H) {
   const N = Math.max(W, H);
   g.fillStyle = '#f4f3f0'; g.fillRect(0, 0, W, H);
   g.save(); g.translate(W / 2, H / 2); g.rotate(-25 * Math.PI / 180);
-  g.fillStyle = '#e9e6e0'; g.font = `600 ${Math.round(N / 47)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
+  g.fillStyle = '#d6cdbb'; g.font = `700 ${Math.round(N / 40)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
   const sx = N * 0.1625, sy = N * 0.075;
   for (let j = 0, y = -N; y < N; y += sy, j++) for (let x = -N + (j % 2) * sx / 2; x < N; x += sx) g.fillText('세탁플랜', x, y);
   g.restore();
