@@ -33,8 +33,10 @@ function enhIcon(g, x, y, s) {
   g.fillStyle = '#0d1322'; g.beginPath(); g.arc(61, 70, 6, 0, 7); g.fill(); g.fillStyle = '#4a7cf0'; g.beginPath(); g.arc(76, 80, 5, 0, 7); g.fill();
   g.restore();
 }
-function enhPaintBrand(g, W, H) {
-  const N = Math.max(W, H), fy = H;
+function enhPaintBrand(g0, W0, H0) {
+  // 벽지 무늬는 작게 그린 뒤 키워서 살짝 흐리게(초점 밖 느낌) → 물건이 벽에서 떨어져 보이게
+  const sc = 0.42, W = Math.round(W0 * sc), H = Math.round(H0 * sc), pc = enhCanvas(W, H), g = pc.getContext('2d');
+  const N = Math.max(W, H);
   g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, W, H);
   // 로고 반복 (줄마다 반 칸씩 엇갈리게)
   const rowp = N * 0.095, ic = N * 0.038, fs1 = N * 0.028, fs2 = N * 0.017;
@@ -53,9 +55,22 @@ function enhPaintBrand(g, W, H) {
     }
   }
   g.restore();
-  const hi = g.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, N * 0.8);
-  hi.addColorStop(0, 'rgba(255,255,255,.18)'); hi.addColorStop(0.6, 'rgba(255,255,255,0)'); hi.addColorStop(1, 'rgba(0,0,0,.14)');
-  g.fillStyle = hi; g.fillRect(0, 0, W, H);
+  g0.fillStyle = '#f7f9fc'; g0.fillRect(0, 0, W0, H0);
+  g0.save(); g0.globalAlpha = 0.62; g0.imageSmoothingEnabled = true; g0.imageSmoothingQuality = 'high'; g0.drawImage(pc, 0, 0, W0, H0); g0.restore();
+  // 아래쪽은 은은한 바닥 톤(카펫 무늬 없이 색만) — 물건이 바닥에 놓인 느낌
+  const fl = g0.createLinearGradient(0, H0 * 0.6, 0, H0);
+  fl.addColorStop(0, 'rgba(226,230,237,0)'); fl.addColorStop(0.55, 'rgba(222,226,234,.55)'); fl.addColorStop(1, 'rgba(208,213,222,.9)');
+  g0.fillStyle = fl; g0.fillRect(0, H0 * 0.6, W0, H0 * 0.4);
+  const N0 = Math.max(W0, H0), hi = g0.createRadialGradient(W0 / 2, H0 * 0.42, 0, W0 / 2, H0 * 0.42, N0 * 0.8);
+  hi.addColorStop(0, 'rgba(255,255,255,.35)'); hi.addColorStop(0.55, 'rgba(255,255,255,0)'); hi.addColorStop(1, 'rgba(0,0,0,.16)');
+  g0.fillStyle = hi; g0.fillRect(0, 0, W0, H0);
+}
+// 물건 아래 바닥 그림자 (타원형, 가운데 진하고 바깥으로 흐려짐)
+function enhGroundShadow(g, cx, by, w) {
+  g.save(); g.translate(cx, by); g.scale(1, 0.13);
+  const r = w * 0.56, gr = g.createRadialGradient(0, 0, 0, 0, 0, r);
+  gr.addColorStop(0, 'rgba(25,28,38,.38)'); gr.addColorStop(0.55, 'rgba(25,28,38,.16)'); gr.addColorStop(1, 'rgba(25,28,38,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill(); g.restore();
 }
 function enhCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const enhBlob = (c, type = 'image/jpeg', q = 0.9) => new Promise((ok, no) => c.toBlob(b => (b ? ok(b) : no(new Error('사진을 만들지 못했습니다'))), type, q));
@@ -205,15 +220,17 @@ async function enhCompose(cut, bg) {
   let out;
   if (touches) {
     out = enhCanvas(W, H); const g = out.getContext('2d'); enhPaintBg(g, W, H, bg);
-    g.save(); g.shadowColor = 'rgba(40,34,28,.18)'; g.shadowBlur = Math.max(W, H) * 0.025; g.shadowOffsetY = Math.max(W, H) * 0.01; g.drawImage(obj, 0, 0); g.restore();
+    if (y1 < H - 2) enhGroundShadow(g, (x0 + x1) / 2, y1, x1 - x0);
+    g.save(); g.shadowColor = 'rgba(30,30,40,.22)'; g.shadowBlur = Math.max(W, H) * 0.03; g.shadowOffsetY = Math.max(W, H) * 0.012; g.drawImage(obj, 0, 0); g.restore();
   } else {
     // 원본 사진과 같은 비율의 틀에, 물건이 화면을 꽉 채우게(가장자리 여백 4%)
     const r = ENH.out / Math.max(W, H), CW = Math.round(W * r), CH = Math.round(H * r), N = Math.max(CW, CH), m = N * 0.04;
     out = enhCanvas(CW, CH); const g = out.getContext('2d'); enhPaintBg(g, CW, CH, bg);
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min((CW - 2 * m) / bw, (CH - 2 * m) / bh, 3), dw = bw * k, dh = bh * k;
-    g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = N * 0.035; g.shadowOffsetY = N * 0.018; g.imageSmoothingQuality = 'high';
-    // 물건은 가운데
+    // 물건은 가운데, 발밑에 바닥 그림자
     const dy = (CH - dh) / 2;
+    enhGroundShadow(g, CW / 2, dy + dh, dw);
+    g.save(); g.shadowColor = 'rgba(30,30,40,.24)'; g.shadowBlur = N * 0.04; g.shadowOffsetY = N * 0.02; g.imageSmoothingQuality = 'high';
     g.drawImage(obj, x0, y0, bw, bh, (CW - dw) / 2, dy, dw, dh); g.restore();
   }
   return { blob: await enhBlob(out), cutout: true };

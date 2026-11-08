@@ -62,12 +62,12 @@ input[type=email],input[type=password]{width:100%;font:inherit;font-size:16px;pa
 <input type="file" id="fcam" accept="image/*" capture="environment" hidden>
 <input type="file" id="falb" accept="image/*" multiple hidden>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/config.js?v=20261108f"></script>
+<script src="/config.js?v=20261108h"></script>
 <script>
 const C = window.QR_LAUNDRY_CONFIG || {};
 const sb = (C.supabaseUrl && window.supabase) ? window.supabase.createClient(C.supabaseUrl, C.supabasePublishableKey, { auth: { lock: (n, t, fn) => fn() } }) : null;
 </script>
-<script src="/enhance.js?v=20261108f"></script>
+<script src="/enhance.js?v=20261108h"></script>
 <script>
 const $ = s => document.querySelector(s);
 const items = []; // { file, res, busy, err, showOrig }
