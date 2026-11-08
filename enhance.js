@@ -42,9 +42,10 @@ function enhPaintBrand(g, W, H) {
   g.font = `800 ${fs1}px ${font}`; const w1 = g.measureText('세탁플랜').width;
   g.font = `700 ${fs2}px ${font}`; if (ls) g.letterSpacing = `${fs2 * 0.14}px`; const w2 = g.measureText('SETAKPLAN').width; if (ls) g.letterSpacing = '0px';
   const t1 = ic * 1.25, t2 = t1 + w1 + fs1 * 0.9, colp = t2 + w2 + fs1 * 1.6;
-  g.save(); g.beginPath(); g.rect(0, 0, W, fy); g.clip(); g.textBaseline = 'middle';
-  for (let r = 0, y = rowp * 0.45; y < fy + rowp; y += rowp, r++) {
-    for (let x = -(r % 2) * colp / 2 - colp * 0.3; x < W + colp; x += colp) {
+  // 사선(-25도)으로 기울여 사진 전체에 반복
+  g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip(); g.translate(W / 2, H / 2); g.rotate(-25 * Math.PI / 180); g.textBaseline = 'middle';
+  for (let r = 0, y = -N; y < N; y += rowp, r++) {
+    for (let x = -N - (r % 2) * colp / 2; x < N; x += colp) {
       enhIcon(g, x, y - ic / 2, ic);
       g.font = `800 ${fs1}px ${font}`; g.fillStyle = 'rgba(42,61,99,.82)'; g.fillText('세탁플랜', x + t1, y + fs1 * 0.04);
       g.font = `700 ${fs2}px ${font}`; g.fillStyle = 'rgba(74,124,240,.8)'; if (ls) g.letterSpacing = `${fs2 * 0.14}px`;
