@@ -1,8 +1,18 @@
 {
   "rewrites": [
-    { "source": "/q/:code", "destination": "/index.html" }
+    {
+      "source": "/q/:code",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/studio",
+      "destination": "/studio.html"
+    }
   ],
   "crons": [
-    { "path": "/api/keepalive", "schedule": "0 18 * * *" }
+    {
+      "path": "/api/keepalive",
+      "schedule": "0 18 * * *"
+    }
   ]
 }

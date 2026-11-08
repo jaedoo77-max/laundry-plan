@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>세탁플랜 사진</title>
+<link rel="manifest" href="/studio.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-studio.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-studio-192.png">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="세탁플랜 사진">
+<style>
+:root{--ink:#14213a;--sub:#5f6b7e;--line:#e3e8f0;--bg:#f6f8fb;--blue:#3f6ff0;--card:#fff}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px}
+header img{width:34px;height:34px;border-radius:9px}header h1{font-size:18px;margin:0;font-weight:800;letter-spacing:-.2px}header small{display:block;font-size:12px;color:var(--sub);font-weight:500}
+main{max-width:640px;margin:0 auto;padding:16px 16px calc(110px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+button{font:inherit;border:0;border-radius:12px;padding:14px 12px;font-weight:700;font-size:16px;cursor:pointer}
+.primary{background:var(--blue);color:#fff}.ghost{background:#eef2f9;color:var(--ink)}.dark{background:var(--ink);color:#fff}
+button:disabled{opacity:.5}
+.label{font-size:13px;font-weight:700;color:var(--sub);margin:0 0 8px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:9px 14px;border-radius:20px;border:1px solid var(--line);background:#fff;font-size:15px;font-weight:600;color:var(--ink)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.hint{font-size:13px;color:var(--sub);line-height:1.6;margin:10px 0 0}
+.status{font-size:13px;padding:10px 12px;border-radius:10px;background:#eef6ff;color:#1d4f9c;line-height:1.5}
+.status.warn{background:#fff6e6;color:#8a5a00}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ph{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative}
+.ph .img{aspect-ratio:3/4;background:#eef1f6 center/contain no-repeat;display:grid;place-items:center;color:var(--sub);font-size:14px}
+.ph .tag{position:absolute;top:8px;left:8px;background:rgba(20,33,58,.82);color:#fff;font-size:12px;font-weight:700;padding:4px 8px;border-radius:8px}
+.ph .acts{display:flex;border-top:1px solid var(--line)}.ph .acts button{flex:1;border-radius:0;background:#fff;font-size:14px;padding:11px 4px;color:var(--ink)}
+.ph .acts button+button{border-left:1px solid var(--line)}
+.spin{width:26px;height:26px;border:3px solid #d6deeb;border-top-color:var(--blue);border-radius:50%;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;max-width:640px;margin:0 auto}
+.bar button{flex:1}
+input[type=email],input[type=password]{width:100%;font:inherit;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:10px;margin:0 0 10px}
+.empty{text-align:center;color:var(--sub);padding:28px 10px;font-size:15px;line-height:1.7}
+.view{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column}
+.view .top{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#fff;font-weight:700}
+.view .top button{padding:9px 16px;font-size:15px;background:#fff;color:var(--ink)}
+.view .pic{flex:1;background:center/contain no-repeat}
+.view .bot{padding:12px 14px calc(14px + env(safe-area-inset-bottom));display:flex;gap:10px}.view .bot button{flex:1}
+</style></head>
+<body>
+<header><img src="/icon-studio-192.png" alt=""><div><h1>세탁플랜 사진</h1><small>찍으면 세탁플랜 배경으로 자동 보정</small></div></header>
+<main>
+  <section class="card" id="auth"></section>
+  <section class="card">
+    <p class="label">배경</p>
+    <div class="chips" id="bgs"></div>
+    <p class="hint">옷 전체가 화면에 들어오게, 위아래 여유를 조금 두고 찍어 주세요. 가까이 찍은 사진은 배경은 그대로 두고 밝기·색만 보정돼요.</p>
+  </section>
+  <section id="list"><div class="empty">아래 <b>사진 찍기</b>를 누르면<br>보정된 사진이 여기에 나와요.<br>사진은 이 휴대폰에만 있고 따로 저장되지 않아요.</div></section>
+</main>
+<div class="bar">
+  <button class="primary" id="cam">사진 찍기</button>
+  <button class="ghost" id="alb">앨범</button>
+  <button class="dark" id="all" hidden>모두 저장</button>
+</div>
+<input type="file" id="fcam" accept="image/*" capture="environment" hidden>
+<input type="file" id="falb" accept="image/*" multiple hidden>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/config.js?v=20261108f"></script>
+<script>
+const C = window.QR_LAUNDRY_CONFIG || {};
+const sb = (C.supabaseUrl && window.supabase) ? window.supabase.createClient(C.supabaseUrl, C.supabasePublishableKey, { auth: { lock: (n, t, fn) => fn() } }) : null;
+</script>
+<script src="/enhance.js?v=20261108f"></script>
+<script>
+const $ = s => document.querySelector(s);
+const items = []; // { file, res, busy, err, showOrig }
+const BGS = ['brand', 'white', 'gray'];
+let bg = BGS.includes(enhBg()) ? enhBg() : 'brand';
+
+// 로그인 상태: 로그인돼 있으면 Photoroom(고품질), 아니면 휴대폰 무료 방식
+async function renderAuth() {
+  const box = $('#auth');
+  let s = null; try { s = (await sb?.auth.getSession())?.data?.session; } catch {}
+  if (s) { box.innerHTML = `<div class="status">고품질 보정(Photoroom) 사용 중 · ${s.user.email}</div>`; return; }
+  box.innerHTML = `<div class="status warn">로그인하면 고품질 보정(Photoroom)이 적용돼요. 로그인하지 않으면 휴대폰 무료 방식으로 보정돼요.</div>
+    <div style="margin-top:12px"><input id="em" type="email" placeholder="관리자 이메일" autocomplete="username"><input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password">
+    <button class="primary" id="li" style="width:100%">로그인</button><p class="hint" id="lm"></p></div>`;
+  $('#li').onclick = async () => {
+    const r = await sb.auth.signInWithPassword({ email: $('#em').value.trim(), password: $('#pw').value });
+    if (r.error) { $('#lm').textContent = '로그인 실패: 이메일·비밀번호를 확인해 주세요.'; return; }
+    renderAuth();
+  };
+}
+function renderBgs() {
+  $('#bgs').innerHTML = BGS.map(k => `<button class="chip ${k === bg ? 'on' : ''}" data-k="${k}">${ENH_BGS[k]}</button>`).join('');
+  $('#bgs').querySelectorAll('.chip').forEach(b => b.onclick = () => setBg(b.dataset.k));
+}
+async function setBg(k) {
+  if (k === bg) return; bg = k; enhSetBg(k); renderBgs();
+  for (const it of items) { // 배경만 다시 그리기 (추가 비용 없음)
+    if (!it.res?.cut || it.busy) continue;
+    it.busy = true; draw();
+    try { const r = await enhRecompose(it.file, it.res.cut, bg); try { URL.revokeObjectURL(it.res.url) } catch {} it.res = { ...it.res, ...r }; } catch {}
+    it.busy = false; draw();
+  }
+}
+function draw() {
+  const L = $('#list');
+  if (!items.length) return;
+  L.innerHTML = `<div class="grid">${items.map((it, i) => {
+    const url = it.showOrig ? it.origUrl : it.res?.url;
+    const tag = it.busy ? '보정 중' : it.err ? '보정 실패' : it.showOrig ? '원본' : it.res?.cutout ? '보정본' : '색감 보정';
+    return `<div class="ph"><div class="img" data-i="${i}" style="${url && !it.busy ? `background-image:url('${url}')` : ''}">${it.busy ? '<div class="spin"></div>' : ''}</div>
+      <span class="tag">${tag}</span>
+      <div class="acts"><button data-s="${i}" ${it.busy || !it.res ? 'disabled' : ''}>저장</button><button data-o="${i}" ${it.busy || !it.res ? 'disabled' : ''}>${it.showOrig ? '보정본' : '원본'}</button><button data-d="${i}">삭제</button></div></div>`;
+  }).join('')}</div>`;
+  L.querySelectorAll('[data-s]').forEach(b => b.onclick = () => saveFiles([outFile(items[+b.dataset.s])]));
+  L.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const it = items[+b.dataset.o]; it.showOrig = !it.showOrig; draw(); });
+  L.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const it = items.splice(+b.dataset.d, 1)[0]; try { URL.revokeObjectURL(it.origUrl); URL.revokeObjectURL(it.res?.url) } catch {} if (!items.length) location.reload(); else draw(); });
+  L.querySelectorAll('.img[data-i]').forEach(d => d.onclick = () => view(+d.dataset.i));
+  $('#all').hidden = items.filter(x => x.res).length < 2;
+}
+function stamp() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+function outFile(it) {
+  const i = items.indexOf(it) + 1, f = it.showOrig ? it.file : it.res.file;
+  return new File([f], `setakplan_${it.t}_${i}${it.showOrig ? '_orig' : ''}.jpg`, { type: 'image/jpeg' });
+}
+async function saveFiles(files) {
+  try {
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  for (const f of files) { const u = URL.createObjectURL(f), a = document.createElement('a'); a.href = u; a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(u) }, 1500); await new Promise(r => setTimeout(r, 300)); }
+}
+function view(i) {
+  const it = items[i]; if (!it?.res || it.busy) return;
+  const v = document.createElement('div'); v.className = 'view';
+  const pic = () => `background-image:url('${it.showOrig ? it.origUrl : it.res.url}')`;
+  v.innerHTML = `<div class="top"><span>${it.showOrig ? '원본' : '보정본'}</span><button id="vc">닫기</button></div><div class="pic" style="${pic()}"></div><div class="bot"><button class="ghost" id="vo">${it.showOrig ? '보정본 보기' : '원본 보기'}</button><button class="primary" id="vs">저장</button></div>`;
+  document.body.appendChild(v);
+  v.querySelector('#vc').onclick = () => { v.remove(); draw(); };
+  v.querySelector('#vo').onclick = () => { it.showOrig = !it.showOrig; v.remove(); view(i); };
+  v.querySelector('#vs').onclick = () => saveFiles([outFile(it)]);
+}
+function add(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const it = { file, origUrl: URL.createObjectURL(file), busy: true, t: stamp() };
+    items.push(it);
+    enhancePhoto(file, bg).then(r => { it.res = r; }).catch(e => { it.err = e.message || String(e); it.res = { file, url: it.origUrl, cutout: false }; }).finally(() => { it.busy = false; draw(); });
+  }
+  draw(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+$('#cam').onclick = () => $('#fcam').click();
+$('#alb').onclick = () => $('#falb').click();
+$('#fcam').onchange = e => { add([...e.target.files]); e.target.value = ''; };
+$('#falb').onchange = e => { add([...e.target.files]); e.target.value = ''; };
+$('#all').onclick = () => saveFiles(items.filter(x => x.res && !x.busy).map(outFile));
+renderBgs(); renderAuth();
+</script>
+</body></html>

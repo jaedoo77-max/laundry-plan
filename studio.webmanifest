@@ -1,0 +1,13 @@
+{
+  "name": "세탁플랜 사진",
+  "short_name": "세탁플랜 사진",
+  "start_url": "/studio",
+  "scope": "/studio",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icon-studio-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-studio-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
