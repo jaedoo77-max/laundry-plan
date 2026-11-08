@@ -1,3 +1,4 @@
+const AUTH_LINK=(location.hash.match(/type=(invite|recovery)/)||[])[1]||'';let pwFormShown=false;
 const C=window.QR_LAUNDRY_CONFIG||{}; const app=document.querySelector('#app'); document.querySelector('#brand').textContent=C.shopName||'QR Laundry';
 const configured=()=>C.supabaseUrl&&C.supabasePublishableKey;
 const sb=configured()?window.supabase.createClient(C.supabaseUrl,C.supabasePublishableKey,{auth:{lock:(name,timeout,fn)=>fn()}}):null;
@@ -70,4 +71,10 @@ async function findItem(){const term=document.querySelector('#find').value.trim(
 function completeForm(item){return careEditor(item)}
 function shortCode(publicCode){return String(publicCode||'').replace(/^QL-/i,'').toUpperCase()}
 function publicCodeFromRoute(value){const clean=decodeURIComponent(String(value||'')).trim().toUpperCase();return /^[0-9A-F]{8}$/.test(clean)?`QL-${clean}`:clean}
-function route(){if(!configured())return setup();const params=new URLSearchParams(location.search);const match=location.pathname.match(/^\/q\/([^/]+)\/?$/);const code=publicCodeFromRoute(match?match[1]:params.get('code'));return location.hash==='#admin'?admin():customer(code)}route();window.addEventListener('hashchange',route);
+// 초대·비밀번호 재설정 메일의 링크로 들어왔을 때: 비밀번호 만들기
+async function setPasswordPage(){document.body.classList.remove('public-page');app.innerHTML='<section class="card"><p class="loading">확인 중…</p></section>';let s=null;for(let i=0;i<20&&!s;i++){s=(await sb.auth.getSession()).data.session;if(!s)await new Promise(r=>setTimeout(r,300))}
+if(!s){app.innerHTML='<section class="card"><h1>링크가 만료됐어요</h1><p class="muted">메일의 링크는 한 번만, 정해진 시간 안에만 쓸 수 있어요. 사장님께 초대 메일을 다시 보내 달라고 해 주세요.</p></section>';return}
+app.innerHTML=`<section class="card"><h1>${AUTH_LINK==='invite'?'세탁플랜 직원 계정 만들기':'비밀번호 다시 만들기'}</h1><p class="muted">${esc(s.user.email)} 계정에서 쓸 비밀번호를 정해 주세요. (8자 이상)</p><label>새 비밀번호</label><input id="np1" type="password" minlength="8" autocomplete="new-password"><label>한 번 더</label><input id="np2" type="password" minlength="8" autocomplete="new-password"><button id="npok">비밀번호 저장</button><p id="npmsg"></p></section>`;
+const m=document.querySelector('#npmsg');document.querySelector('#npok').onclick=async()=>{const a=document.querySelector('#np1').value,b=document.querySelector('#np2').value;if(a.length<8){m.className='error';m.textContent='8자 이상으로 정해 주세요.';return}if(a!==b){m.className='error';m.textContent='두 비밀번호가 달라요.';return}const r=await sb.auth.updateUser({password:a});if(r.error){m.className='error';m.textContent='저장 실패: '+r.error.message;return}
+history.replaceState(null,'',location.pathname);app.innerHTML='<section class="card"><h1>준비 끝</h1><p class="muted">이제 이 이메일과 방금 정한 비밀번호로 로그인하면 돼요.</p><a class="button" href="/studio">세탁플랜 사진 앱 열기</a> <a class="button" href="/#admin" style="background:#e8eef7;color:#11263c">관리자 화면 열기</a></section>'}}
+function route(){if(!configured())return setup();if(AUTH_LINK){if(!pwFormShown){pwFormShown=true;setPasswordPage()}return}const params=new URLSearchParams(location.search);const match=location.pathname.match(/^\/q\/([^/]+)\/?$/);const code=publicCodeFromRoute(match?match[1]:params.get('code'));return location.hash==='#admin'?admin():customer(code)}route();window.addEventListener('hashchange',route);
