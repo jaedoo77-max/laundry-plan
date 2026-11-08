@@ -35,11 +35,12 @@ function enhIcon(g, x, y, s) {
 }
 function enhPaintBrand(g0, W0, H0) {
   // 벽지 무늬는 작게 그린 뒤 키워서 살짝 흐리게(초점 밖 느낌) → 물건이 벽에서 떨어져 보이게
-  const sc = 0.32, W = Math.round(W0 * sc), H = Math.round(H0 * sc), pc = enhCanvas(W, H), g = pc.getContext('2d');
+  const sc = 0.5, W = Math.round(W0 * sc), H = Math.round(H0 * sc), pc = enhCanvas(W, H), g = pc.getContext('2d');
   const N = Math.max(W, H);
   g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, W, H);
   // 로고 반복 (줄마다 반 칸씩 엇갈리게)
-  const rowp = N * 0.095, ic = N * 0.038, fs1 = N * 0.028, fs2 = N * 0.017;
+  const D = 0.62; // 무늬 크기(작을수록 벽이 멀어 보임)
+  const rowp = N * 0.095 * D, ic = N * 0.038 * D, fs1 = N * 0.028 * D, fs2 = N * 0.017 * D;
   const font = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif', ls = g.letterSpacing !== undefined;
   g.font = `800 ${fs1}px ${font}`; const w1 = g.measureText('세탁플랜').width;
   g.font = `700 ${fs2}px ${font}`; if (ls) g.letterSpacing = `${fs2 * 0.14}px`; const w2 = g.measureText('SETAKPLAN').width; if (ls) g.letterSpacing = '0px';
@@ -56,7 +57,11 @@ function enhPaintBrand(g0, W0, H0) {
   }
   g.restore();
   g0.fillStyle = '#f7f9fc'; g0.fillRect(0, 0, W0, H0);
-  g0.save(); g0.globalAlpha = 0.55; g0.imageSmoothingEnabled = true; g0.imageSmoothingQuality = 'high'; g0.drawImage(pc, 0, 0, W0, H0); g0.restore();
+  // 한 번 더 작게 줄였다 키워서 흐림을 강하게(멀리 있는 벽은 초점이 많이 나감)
+  const bc = enhCanvas(Math.max(8, Math.round(W0 * 0.2)), Math.max(8, Math.round(H0 * 0.2))), bx = bc.getContext('2d'); bx.imageSmoothingQuality = 'high'; bx.drawImage(pc, 0, 0, bc.width, bc.height);
+  g0.save(); g0.globalAlpha = 0.42; g0.imageSmoothingEnabled = true; g0.imageSmoothingQuality = 'high'; g0.drawImage(bc, 0, 0, W0, H0); g0.restore();
+  // 공기 원근감: 먼 벽은 대비가 줄고 뿌옇게
+  g0.fillStyle = 'rgba(244,246,250,.18)'; g0.fillRect(0, 0, W0, H0);
   // 벽이 바닥으로 부드럽게 이어지는 스튜디오 느낌: 아래로 갈수록 무늬가 사라지고 밝은 회색 바닥
   const fy = H0 * 0.72, fl = g0.createLinearGradient(0, fy - H0 * 0.08, 0, H0);
   fl.addColorStop(0, 'rgba(236,239,244,0)'); fl.addColorStop(0.3, 'rgba(234,237,242,.85)'); fl.addColorStop(1, 'rgba(218,222,229,1)');
@@ -68,7 +73,7 @@ function enhPaintBrand(g0, W0, H0) {
 }
 // 벽에 비친 그림자: 물건 모양 그대로, 옆·아래로 비껴서 크게 흐리게 → 벽과 떨어져 있는 느낌
 function enhWallShadow(g, img, sx, sy, sw, sh, dx, dy, dw, dh, N) {
-  g.save(); g.shadowColor = 'rgba(20,25,40,.26)'; g.shadowBlur = N * 0.06; g.shadowOffsetX = 100000 + N * 0.045; g.shadowOffsetY = N * 0.03;
+  g.save(); g.shadowColor = 'rgba(20,25,40,.2)'; g.shadowBlur = N * 0.09; g.shadowOffsetX = 100000 + N * 0.06; g.shadowOffsetY = N * 0.035;
   g.drawImage(img, sx, sy, sw, sh, dx - 100000, dy, dw, dh); g.restore();
 }
 // 물건 아래 바닥 그림자 (타원형, 가운데 진하고 바깥으로 흐려짐)
