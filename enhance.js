@@ -17,26 +17,56 @@ const ENH_LOCAL = {
     'e7ca5cc3e0afd65581642a05ac91eb8ea4d0deb868df94b8981c910212526476', '0ad4ebb86cfdd847901427181b7a7804dba93d868c3cd5f11a294acf36c9413f',
     '9582c0375aed822c5577a814766c4afc6c096f4ccd3b0d08af6a1794987206a1'],
 };
-const ENH_BGS = { brand: '세탁플랜 벽지', white: '흰색', gray: '연회색', check: '체크 무늬' };
+const ENH_BGS = { brand: '세탁플랜 포토월', white: '흰색', gray: '연회색', check: '체크 무늬' };
 function enhEnabled() { try { return localStorage.getItem('enh-off') !== '1'; } catch { return true; } }
 function enhSetEnabled(on) { try { on ? localStorage.removeItem('enh-off') : localStorage.setItem('enh-off', '1'); } catch {} }
 function enhBg() { try { const v = localStorage.getItem('enh-bg'); return ENH_BGS[v] ? v : 'brand'; } catch { return 'brand'; } }
 function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'brand'); } catch {} }
-const ENH_FLOOR = 0.78; // 세탁플랜 벽지: 벽과 바닥이 만나는 높이(비율)
-// 세탁플랜 벽지: 밝은 스튜디오 벽 + 사선 '세탁플랜' 글자 무늬 + 바닥 + 가운데 조명
-function enhPaintBrand(g, W, H) {
-  const N = Math.max(W, H), fy = H * ENH_FLOOR, band = N * 0.025;
-  g.fillStyle = '#f4f3f0'; g.fillRect(0, 0, W, H);
-  const fl = g.createLinearGradient(0, fy - band, 0, fy); fl.addColorStop(0, 'rgba(229,226,220,0)'); fl.addColorStop(1, 'rgba(229,226,220,1)');
-  g.fillStyle = fl; g.fillRect(0, fy - band, W, band); g.fillStyle = '#e5e2dc'; g.fillRect(0, fy, W, H - fy);
-  // 사선 '세탁플랜' 글자 무늬: 벽과 바닥 전체에
-  g.save(); g.translate(W / 2, H / 2); g.rotate(-25 * Math.PI / 180);
-  g.fillStyle = 'rgba(176,160,128,.32)'; g.font = `700 ${Math.round(N / 40)}px "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif`; g.textBaseline = 'top';
-  const sx = N * 0.1625, sy = N * 0.075;
-  for (let j = 0, y = -N; y < N; y += sy, j++) for (let x = -N + (j % 2) * sx / 2; x < N; x += sx) g.fillText('세탁플랜', x, y);
+const ENH_FLOOR = 0.72; // 세탁플랜 포토월: 벽과 바닥이 만나는 높이(비율)
+// 세탁플랜 포토월: 로고(물방울 아이콘 + 세탁플랜 + SETAKPLAN) 반복 벽 + 회색 카펫 바닥 + 가운데 조명
+const ENH_DROP = new Path2D('M50 14 C50 14 25 44 25 62 A25 25 0 0 0 75 62 C75 44 50 14 50 14Z');
+function enhIcon(g, x, y, s) {
+  g.save(); g.translate(x, y); g.scale(s / 100, s / 100);
+  const bgr = g.createLinearGradient(0, 0, 0, 100); bgr.addColorStop(0, '#1b2338'); bgr.addColorStop(1, '#0a0f1c');
+  g.fillStyle = bgr; g.beginPath(); g.roundRect ? g.roundRect(2, 2, 96, 96, 24) : g.rect(2, 2, 96, 96); g.fill();
+  const dg = g.createLinearGradient(0, 14, 0, 87); dg.addColorStop(0, '#6fa2f0'); dg.addColorStop(1, '#3f6ff0'); g.fillStyle = dg; g.fill(ENH_DROP);
+  g.fillStyle = '#0d1322'; g.beginPath(); g.arc(61, 70, 6, 0, 7); g.fill(); g.fillStyle = '#4a7cf0'; g.beginPath(); g.arc(76, 80, 5, 0, 7); g.fill();
   g.restore();
-  const hi = g.createRadialGradient(W / 2, H * 0.35, 0, W / 2, H * 0.35, N * 0.75);
-  hi.addColorStop(0, 'rgba(255,255,255,.38)'); hi.addColorStop(0.55, 'rgba(255,255,255,.08)'); hi.addColorStop(1, 'rgba(0,0,0,.12)');
+}
+let ENH_CARPET = null;
+function enhCarpet() { // 카펫 결(작은 점 무늬) 한 번 만들어 재사용
+  if (ENH_CARPET) return ENH_CARPET;
+  const T = 256, c = enhCanvas(T, T), x = c.getContext('2d'), d = x.createImageData(T, T);
+  for (let i = 0; i < T * T; i++) { const n = Math.random(), v = 108 + (n < 0.12 ? -38 : n > 0.9 ? 34 : (n - 0.5) * 22); d.data[i * 4] = v; d.data[i * 4 + 1] = v + 1; d.data[i * 4 + 2] = v + 5; d.data[i * 4 + 3] = 255; }
+  x.putImageData(d, 0, 0); return (ENH_CARPET = c);
+}
+function enhPaintBrand(g, W, H) {
+  const N = Math.max(W, H), fy = H * ENH_FLOOR;
+  g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, W, fy);
+  // 로고 반복 (줄마다 반 칸씩 엇갈리게)
+  const rowp = N * 0.095, ic = N * 0.038, fs1 = N * 0.028, fs2 = N * 0.017;
+  const font = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif', ls = g.letterSpacing !== undefined;
+  g.font = `800 ${fs1}px ${font}`; const w1 = g.measureText('세탁플랜').width;
+  g.font = `700 ${fs2}px ${font}`; if (ls) g.letterSpacing = `${fs2 * 0.14}px`; const w2 = g.measureText('SETAKPLAN').width; if (ls) g.letterSpacing = '0px';
+  const t1 = ic * 1.25, t2 = t1 + w1 + fs1 * 0.9, colp = t2 + w2 + fs1 * 1.6;
+  g.save(); g.beginPath(); g.rect(0, 0, W, fy); g.clip(); g.textBaseline = 'middle';
+  for (let r = 0, y = rowp * 0.45; y < fy + rowp; y += rowp, r++) {
+    for (let x = -(r % 2) * colp / 2 - colp * 0.3; x < W + colp; x += colp) {
+      enhIcon(g, x, y - ic / 2, ic);
+      g.font = `800 ${fs1}px ${font}`; g.fillStyle = 'rgba(42,61,99,.82)'; g.fillText('세탁플랜', x + t1, y + fs1 * 0.04);
+      g.font = `700 ${fs2}px ${font}`; g.fillStyle = 'rgba(74,124,240,.8)'; if (ls) g.letterSpacing = `${fs2 * 0.14}px`;
+      g.fillText('SETAKPLAN', x + t2, y + fs1 * 0.04); if (ls) g.letterSpacing = '0px';
+    }
+  }
+  g.restore();
+  // 카펫 바닥
+  const scale = Math.max(1, Math.round(N / 900));
+  g.save(); g.beginPath(); g.rect(0, fy, W, H - fy); g.clip(); g.imageSmoothingEnabled = false;
+  const T = enhCarpet(); for (let y = fy; y < H; y += 256 * scale) for (let x = 0; x < W; x += 256 * scale) g.drawImage(T, x, y, 256 * scale, 256 * scale);
+  g.restore();
+  const sh = g.createLinearGradient(0, fy, 0, fy + N * 0.03); sh.addColorStop(0, 'rgba(0,0,0,.22)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = sh; g.fillRect(0, fy, W, N * 0.03);
+  const hi = g.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, N * 0.8);
+  hi.addColorStop(0, 'rgba(255,255,255,.18)'); hi.addColorStop(0.6, 'rgba(255,255,255,0)'); hi.addColorStop(1, 'rgba(0,0,0,.14)');
   g.fillStyle = hi; g.fillRect(0, 0, W, H);
 }
 function enhCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -187,7 +217,7 @@ async function enhCompose(cut, bg) {
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min((CW - 2 * m) / bw, (CH - 2 * m) / bh, 3), dw = bw * k, dh = bh * k;
     g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = N * 0.035; g.shadowOffsetY = N * 0.018; g.imageSmoothingQuality = 'high';
     // 세탁플랜 벽지는 물건 밑단이 바닥선에 살짝 닿게(서 있는 느낌), 나머지는 가운데
-    const dy = bg === 'brand' ? Math.min(CH - dh - m, Math.max(m, CH * (ENH_FLOOR + 0.06) - dh)) : (CH - dh) / 2;
+    const dy = bg === 'brand' ? Math.min(CH - dh - m, Math.max(m, CH * (ENH_FLOOR + 0.16) - dh)) : (CH - dh) / 2;
     g.drawImage(obj, x0, y0, bw, bh, (CW - dw) / 2, dy, dw, dh); g.restore();
   }
   return { blob: await enhBlob(out), cutout: true };
