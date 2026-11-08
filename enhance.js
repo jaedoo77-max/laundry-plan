@@ -4,7 +4,7 @@
 // 2) 고른 배경(흰색 / 연회색 / 체크 무늬) 위에 물건 + 은은한 그림자 + 밝기·색 살짝 보정
 // 물건 자체는 다시 그리지 않습니다. 원본은 따로 저장되고, 고객 화면에는 보정본이 올라갑니다.
 const ENH = { out: 1600, queue: Promise.resolve(), ses: null, loading: null };
-const ENH_ENGINE = window.ENH_ENGINE || 'local'; // 'local'(무료, 휴대폰에서 처리) | 'photoroom'(유료)
+const ENH_ENGINE = window.ENH_ENGINE || 'photoroom'; // 'local'(무료, 휴대폰에서 처리) | 'photoroom'(유료)
 // 무료 배경 정리 모델: ISNet(일반 물체용) 경량판 44MB — 처음 한 번만 받고 휴대폰에 보관
 const ENH_LOCAL = {
   ort: window.ENH_ORT_BASE || 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/',
