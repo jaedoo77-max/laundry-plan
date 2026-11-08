@@ -188,6 +188,14 @@ async function enhCompose(cut, bg) {
   const ok = !!alpha && cnt / (W * H) > 0.02 && x1 > x0 && y1 > y0;
   enhTone(img, ok ? alpha : null);
   if (!ok) { const c = enhCanvas(W, H); c.getContext('2d').putImageData(img, 0, 0); return { blob: await enhBlob(c), cutout: false }; }
+  // 가까이서 찍어 물건이 화면을 거의 채운 사진(클로즈업)은 배경을 바꾸지 않음 — 털·옷 사이 틈이 구멍처럼 뚫려 보이는 것 방지. 밝기·색만 보정.
+  {
+    const ed = (len, at) => { let k = 0; for (let j = 0; j < len; j++) if (alpha[at(j) * 4 + 3] > 128) k++; return k / len; };
+    const sides = [ed(W, x => x), ed(W, x => (H - 1) * W + x), ed(H, y => y * W), ed(H, y => y * W + W - 1)].filter(v => v > 0.1).length;
+    let inS = 0, inF = 0; // 물건 안쪽이 얼마나 꽉 찼는지(가로줄마다 왼쪽 끝~오른쪽 끝 사이 채워진 비율)
+    for (let y = y0; y <= y1; y += 2) { let l = -1, r = -1, f = 0; for (let x = 0; x < W; x++) if (alpha[(y * W + x) * 4 + 3] > 128) { if (l < 0) l = x; r = x; f++; } if (l >= 0) { inS += r - l + 1; inF += f; } }
+    if (cnt / (W * H) > 0.45 && sides >= 2 && inF / Math.max(1, inS) < 0.86) { const c = enhCanvas(W, H); c.getContext('2d').putImageData(img, 0, 0); return { blob: await enhBlob(c), cutout: false }; }
+  }
   // 털·니트처럼 반투명하게 잡힌 부분은 단단하게(속은 불투명, 끝만 부드럽게) — 밝은 배경이 비쳐 '바래' 보이는 것 방지
   for (let i = 0; i < W * H; i++) { const v = alpha[i * 4 + 3]; img.data[i * 4 + 3] = v <= 16 ? 0 : v >= 150 ? 255 : Math.round((v - 16) / 134 * 255); }
   const obj = enhCanvas(W, H); obj.getContext('2d').putImageData(img, 0, 0);
