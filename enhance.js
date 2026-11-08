@@ -22,8 +22,8 @@ function enhEnabled() { try { return localStorage.getItem('enh-off') !== '1'; } 
 function enhSetEnabled(on) { try { on ? localStorage.removeItem('enh-off') : localStorage.setItem('enh-off', '1'); } catch {} }
 function enhBg() { try { const v = localStorage.getItem('enh-bg'); return ENH_BGS[v] ? v : 'brand'; } catch { return 'brand'; } }
 function enhSetBg(v) { try { localStorage.setItem('enh-bg', ENH_BGS[v] ? v : 'brand'); } catch {} }
-const ENH_FLOOR = 0.72; // 세탁플랜 포토월: 벽과 바닥이 만나는 높이(비율)
-// 세탁플랜 포토월: 로고(물방울 아이콘 + 세탁플랜 + SETAKPLAN) 반복 벽 + 회색 카펫 바닥 + 가운데 조명
+const ENH_FLOOR = 0.72; // (예전 바닥선 높이, 지금은 안 씀)
+// 세탁플랜 포토월: 로고(물방울 아이콘 + 세탁플랜 + SETAKPLAN) 반복 벽지를 사진 전체에 + 가운데 은은한 조명
 const ENH_DROP = new Path2D('M50 14 C50 14 25 44 25 62 A25 25 0 0 0 75 62 C75 44 50 14 50 14Z');
 function enhIcon(g, x, y, s) {
   g.save(); g.translate(x, y); g.scale(s / 100, s / 100);
@@ -33,16 +33,9 @@ function enhIcon(g, x, y, s) {
   g.fillStyle = '#0d1322'; g.beginPath(); g.arc(61, 70, 6, 0, 7); g.fill(); g.fillStyle = '#4a7cf0'; g.beginPath(); g.arc(76, 80, 5, 0, 7); g.fill();
   g.restore();
 }
-let ENH_CARPET = null;
-function enhCarpet() { // 카펫 결(작은 점 무늬) 한 번 만들어 재사용
-  if (ENH_CARPET) return ENH_CARPET;
-  const T = 256, c = enhCanvas(T, T), x = c.getContext('2d'), d = x.createImageData(T, T);
-  for (let i = 0; i < T * T; i++) { const n = Math.random(), v = 108 + (n < 0.12 ? -38 : n > 0.9 ? 34 : (n - 0.5) * 22); d.data[i * 4] = v; d.data[i * 4 + 1] = v + 1; d.data[i * 4 + 2] = v + 5; d.data[i * 4 + 3] = 255; }
-  x.putImageData(d, 0, 0); return (ENH_CARPET = c);
-}
 function enhPaintBrand(g, W, H) {
-  const N = Math.max(W, H), fy = H * ENH_FLOOR;
-  g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, W, fy);
+  const N = Math.max(W, H), fy = H;
+  g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, W, H);
   // 로고 반복 (줄마다 반 칸씩 엇갈리게)
   const rowp = N * 0.095, ic = N * 0.038, fs1 = N * 0.028, fs2 = N * 0.017;
   const font = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif', ls = g.letterSpacing !== undefined;
@@ -59,12 +52,6 @@ function enhPaintBrand(g, W, H) {
     }
   }
   g.restore();
-  // 카펫 바닥
-  const scale = Math.max(1, Math.round(N / 900));
-  g.save(); g.beginPath(); g.rect(0, fy, W, H - fy); g.clip(); g.imageSmoothingEnabled = false;
-  const T = enhCarpet(); for (let y = fy; y < H; y += 256 * scale) for (let x = 0; x < W; x += 256 * scale) g.drawImage(T, x, y, 256 * scale, 256 * scale);
-  g.restore();
-  const sh = g.createLinearGradient(0, fy, 0, fy + N * 0.03); sh.addColorStop(0, 'rgba(0,0,0,.22)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = sh; g.fillRect(0, fy, W, N * 0.03);
   const hi = g.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, N * 0.8);
   hi.addColorStop(0, 'rgba(255,255,255,.18)'); hi.addColorStop(0.6, 'rgba(255,255,255,0)'); hi.addColorStop(1, 'rgba(0,0,0,.14)');
   g.fillStyle = hi; g.fillRect(0, 0, W, H);
@@ -216,8 +203,8 @@ async function enhCompose(cut, bg) {
     out = enhCanvas(CW, CH); const g = out.getContext('2d'); enhPaintBg(g, CW, CH, bg);
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1, k = Math.min((CW - 2 * m) / bw, (CH - 2 * m) / bh, 3), dw = bw * k, dh = bh * k;
     g.save(); g.shadowColor = 'rgba(40,34,28,.22)'; g.shadowBlur = N * 0.035; g.shadowOffsetY = N * 0.018; g.imageSmoothingQuality = 'high';
-    // 세탁플랜 벽지는 물건 밑단이 바닥선에 살짝 닿게(서 있는 느낌), 나머지는 가운데
-    const dy = bg === 'brand' ? Math.min(CH - dh - m, Math.max(m, CH * (ENH_FLOOR + 0.16) - dh)) : (CH - dh) / 2;
+    // 물건은 가운데
+    const dy = (CH - dh) / 2;
     g.drawImage(obj, x0, y0, bw, bh, (CW - dw) / 2, dy, dw, dh); g.restore();
   }
   return { blob: await enhBlob(out), cutout: true };
